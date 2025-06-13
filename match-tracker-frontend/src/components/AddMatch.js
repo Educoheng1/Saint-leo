@@ -1,3 +1,7 @@
+import { useEffect, useState } from "react";
+import MatchList from "./Schedule";
+
+
 export default function AddMatch({ onAdd }) {
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -26,4 +30,5 @@ export default function AddMatch({ onAdd }) {
       </form>
     );
   }
+
   

@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import database
+from models import matches as matches_table
+from datetime import datetime
 from models import matches
-import datetime
+from datetime import date
+
 
 app = FastAPI()
 
@@ -48,12 +51,24 @@ async def get_matches():
 @app.post("/matches")
 async def create_match(match: Match):
     query = matches.insert().values(
-        date=datetime.date.fromisoformat(match.date),
+        date=date.fromisoformat(match.date),
         opponent=match.opponent,
         location=match.location
     )
     new_id = await database.execute(query)
     return {"id": new_id}
+
+@app.get("/matches/live")
+async def get_live_matches():
+    query = matches_table.select().where(matches_table.c.status == "live")
+    rows = await database.fetch_all(query)
+    return [dict(row) for row in rows]
+
+@app.get("/matches/schedule")
+async def get_full_schedule():
+    from models import matches
+    query = matches.select().order_by(matches.c.date)
+    return await database.fetch_all(query)
 
 @app.post("/players")
 async def create_player(player: Player):
