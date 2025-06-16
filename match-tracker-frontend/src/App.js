@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Schedule } from "./components/Schedule";
 import MatchDetails from "./components/MatchDetails";
 import PlayerList from "./components/PlayerList";
+import LiveMatch from "./components/LiveMatch";
 
 function App() {
   const [matches, setMatches] = useState([]);

@@ -2,10 +2,20 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import database
-from models import matches as matches_table
+from sqlalchemy import select, asc
+from models import matches, lines
 from datetime import datetime
 from models import matches
 from datetime import date
+from sqlalchemy import create_engine
+from models import metadata  # import your MetaData from models.py
+from typing import Optional,List
+
+DATABASE_URL = "sqlite:///./matches.db"
+engine = create_engine(DATABASE_URL)
+
+# This will create all tables defined in metadata (including matches_table)
+metadata.create_all(engine)
 
 
 app = FastAPI()
@@ -17,6 +27,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+class LineCreate(BaseModel):
+    line_type: str           # "singles" or "doubles"
+    line_number: int
+    player1: str
+    player2: Optional[str] = None
+    opponent1: str
+    opponent2: Optional[str] = None
+    score: Optional[str] = None
+    status: Optional[str] = "scheduled"
+
+class MatchCreate(BaseModel):
+    date: datetime
+    opponent: str
+    location: Optional[str] = None
+    status: Optional[str] = "scheduled"
+    lines: List[LineCreate]
+
 
 class Match(BaseModel):
     date: str
@@ -59,10 +86,60 @@ async def create_match(match: Match):
     return {"id": new_id}
 
 @app.get("/matches/live")
-async def get_live_matches():
-    query = matches_table.select().where(matches_table.c.status == "live")
-    rows = await database.fetch_all(query)
-    return [dict(row) for row in rows]
+async def get_next_match():
+    now = datetime.now()
+    # Find the next match
+    match_query = (
+        select(matches)
+        .where(matches.c.date >= now)
+        .where(matches.c.status != "completed")
+        .order_by(asc(matches.c.date))
+        .limit(1)
+    )
+    match_result = await database.fetch_one(match_query)
+    if not match_result:
+        return {}
+
+    # Get all lines for that match
+    lines_query = (
+        select(lines)
+        .where(lines.c.match_id == match_result.id)
+        .order_by(asc(lines.c.line_type), asc(lines.c.line_number))
+    )
+    lines_result = await database.fetch_all(lines_query)
+
+    return {
+        "match": dict(match_result),
+        "lines": [dict(line) for line in lines_result]
+    }
+
+@app.post("/matches/")
+async def create_match(match: MatchCreate):
+    # Insert match
+    query = matches.insert().values(
+        date=match.date,
+        opponent=match.opponent,
+        location=match.location,
+        status=match.status
+    )
+    match_id = await database.execute(query)
+
+    # Insert all lines
+    for line in match.lines:
+        line_query = lines.insert().values(
+            match_id=match_id,
+            line_type=line.line_type,
+            line_number=line.line_number,
+            player1=line.player1,
+            player2=line.player2,
+            opponent1=line.opponent1,
+            opponent2=line.opponent2,
+            score=line.score,
+            status=line.status
+        )
+        await database.execute(line_query)
+
+    return {"id": match_id}
 
 @app.get("/matches/schedule")
 async def get_full_schedule():

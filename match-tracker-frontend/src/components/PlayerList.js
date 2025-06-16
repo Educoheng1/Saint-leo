@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 
-function PlayerList() {
+function PlayerList({ onClose }) {
   const [name, setName] = useState("");
   const [players, setPlayers] = useState([]);
+  
 
   // Fetch all players
   useEffect(() => {
     fetchPlayers();
+    // eslint-disable-next-line
   }, []);
 
   const fetchPlayers = () => {
@@ -35,8 +37,23 @@ function PlayerList() {
   };
 
   return (
-    <div style={{ background: "#e0f7fa", padding: 20, borderRadius: 8 }}>
-      <form onSubmit={handleSubmit}>
+    <div style={{ background: "#e0f7fa", padding: 20, borderRadius: 8, minWidth: 300, position: "relative" }}>
+      <button
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          right: 10,
+          top: 10,
+          background: "transparent",
+          border: "none",
+          fontSize: 20,
+          cursor: "pointer",
+        }}
+        title="Close"
+      >
+        ×
+      </button>
+      <form onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
         <h3>Add New Player</h3>
         <input
           type="text"
@@ -44,6 +61,7 @@ function PlayerList() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
+          style={{ marginRight: 8 }}
         />
         <button type="submit">Add Player</button>
       </form>
