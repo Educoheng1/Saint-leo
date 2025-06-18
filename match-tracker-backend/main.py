@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 from sqlalchemy import create_engine
 from models import players, matches  # SQLAlchemy tables
 from database import database, metadata  # shared db + metadata
@@ -50,27 +50,24 @@ class ScoreUpdate(BaseModel):
     set1: list
     set2: list
 
-# In-memory score (for testing)
-score = {
-    "player1": "Eduardo",
-    "player2": "John",
-    "set1": [6, 4],
-    "set2": [2, 3]
-}
 
+live_scores: List[Dict] = []  # in-memory storage
 # Routes
 @app.get("/")
 async def root():
     return {"message": "Match Tracker API is running!"}
 
-@app.get("/livescore")
-def get_score():
-    return score
 
 @app.post("/livescore")
-def update_score(update: ScoreUpdate):
-    score.update(update.dict())
-    return {"message": "Score updated!"}
+async def update_livescore(request: Request):
+    data = await request.json()
+    global live_scores
+    live_scores = data
+    return {"status": "updated", "count": len(live_scores)}
+
+@app.get("/livescore")
+def get_livescore():
+    return live_scores
 
 @app.post("/players")
 async def create_player(player: Player):
