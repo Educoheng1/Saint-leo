@@ -1,18 +1,24 @@
 import { Link } from "react-router-dom";
+import "../styles.css";
 
 export default function Home() {
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Saint Leo Tennis</h1>
-      <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="home-container">
+      <img
+        src="/saint-leo-logo.png"
+        alt="Saint Leo University Logo"
+        className="home-logo"
+      />
+      <h1 className="home-title">Saint Leo Tennis</h1>
+      <nav className="home-nav">
         <Link to="/schedule">
-          <button>View Schedule</button>
+          <button className="nav-button">View Schedule</button>
         </Link>
         <Link to="/players">
-          <button>Player List</button>
+          <button className="nav-button">Player List</button>
         </Link>
         <Link to="/livescore">
-          <button>Live Score</button>
+          <button className="nav-button">Live Score</button>
         </Link>
       </nav>
     </div>

@@ -1,78 +1,57 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-function PlayerList({ onClose }) {
-  const [name, setName] = useState("");
+export default function LineupEditor({ matchId, onClose }) {
   const [players, setPlayers] = useState([]);
-  
+  const [selected, setSelected] = useState([]);
 
-  // Fetch all players
   useEffect(() => {
-    fetchPlayers();
-    // eslint-disable-next-line
-  }, []);
-
-  const fetchPlayers = () => {
+    // Fetch all players
     fetch("http://127.0.0.1:8000/players")
       .then((res) => res.json())
       .then(setPlayers);
+
+    // Fetch existing lineup
+    fetch(`http://127.0.0.1:8000/schedule/${matchId}/lineup`)
+    .then((res) => res.json())
+      .then((data) => {
+        setSelected(data.players || []);
+      });
+  }, [matchId]);
+
+  const togglePlayer = (id) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
+    );
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const res = await fetch("http://127.0.0.1:8000/players", {
+  const handleSave = async () => {
+    await fetch(`http://127.0.0.1:8000/schedule/${matchId}/lineup`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ name }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ players: selected }),
     });
-
-    if (res.ok) {
-      setName("");
-      fetchPlayers(); // Refresh player list
-    } else {
-      alert("Failed to add player");
-    }
+    onClose();
   };
 
   return (
-    <div style={{ background: "#e0f7fa", padding: 20, borderRadius: 8, minWidth: 300, position: "relative" }}>
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          right: 10,
-          top: 10,
-          background: "transparent",
-          border: "none",
-          fontSize: 20,
-          cursor: "pointer",
-        }}
-        title="Close"
-      >
-        ×
-      </button>
-      <form onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
-        <h3>Add New Player</h3>
-        <input
-          type="text"
-          placeholder="Player name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          style={{ marginRight: 8 }}
-        />
-        <button type="submit">Add Player</button>
-      </form>
-      <h3>Player List</h3>
-      <ul>
-        {players.map((p) => (
-          <li key={p.id}>{p.name}</li>
+    <div className="lineup-editor">
+      <h3 className="lineup-title">Assign Players</h3>
+      <div className="player-list">
+        {players.map((player) => (
+          <label key={player.id} className="player-item">
+            <input
+              type="checkbox"
+              checked={selected.includes(player.id)}
+              onChange={() => togglePlayer(player.id)}
+            />
+            {player.name}
+          </label>
         ))}
-      </ul>
+      </div>
+      <div className="lineup-buttons">
+        <button className="save-button" onClick={handleSave}>Save</button>
+        <button className="cancel-button" onClick={onClose}>Cancel</button>
+      </div>
     </div>
   );
-}
-
-export default PlayerList;
+}  
