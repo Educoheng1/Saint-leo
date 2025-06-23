@@ -4,7 +4,7 @@ import { ScoreInput } from "./components/LiveScore"; // reuse your component
 
 export default function Admin() {
   const [matches, setMatches] = useState([]);
-  const [players, setPlayers] = useState([]);
+
   const [newPlayer, setNewPlayer] = useState({ name: "", country: "" });
 
   useEffect(() => {

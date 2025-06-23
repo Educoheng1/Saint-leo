@@ -54,6 +54,11 @@ class Match(BaseModel):
 
 class Player(BaseModel):
     name: str
+    year: str
+    singles_season: str
+    singles_all_time: str
+    doubles_season: str
+    doubles_all_time: str
 
 class ScoreUpdate(BaseModel):
     player1: str
@@ -82,7 +87,14 @@ def get_livescore():
 
 @app.post("/players")
 async def create_player(player: Player):
-    query = players.insert().values(name=player.name)
+    query = players.insert().values(
+        name=player.name,
+        year=player.year,
+        singles_season=player.singles_season,
+        singles_all_time=player.singles_all_time,
+        doubles_season=player.doubles_season,
+        doubles_all_time=player.doubles_all_time,
+    )
     new_id = await database.execute(query)
     return {"id": new_id}
 

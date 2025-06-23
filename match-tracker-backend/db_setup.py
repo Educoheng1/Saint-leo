@@ -1,4 +1,7 @@
-from models import engine, metadata
+from models import metadata, players
+import sqlalchemy
 
-# Create all tables from metadata
+engine = sqlalchemy.create_engine("sqlite:///./test.db")  # match your DB URL
+metadata.drop_all(engine)
 metadata.create_all(engine)
+print("Players table reset.")

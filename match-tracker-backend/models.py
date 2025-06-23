@@ -26,6 +26,11 @@ players = Table(
     metadata,
     Column("id", Integer, primary_key=True),
     Column("name", String),
+    Column("year", String),  # e.g., Freshman, Sophomore, Junior, Senior
+    Column("singles_season", String),       # e.g., "6-3"
+    Column("singles_all_time", String),     # e.g., "22-12"
+    Column("doubles_season", String),       # e.g., "5-4"
+    Column("doubles_all_time", String),     # e.g., "18-15"
 )
 
 match_lineups = Table(
