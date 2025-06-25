@@ -19,6 +19,18 @@ metadata.create_all(engine)
 # Initialize FastAPI
 app = FastAPI()
 
+LIVE_MATCHES = [
+    {"matchType": "Doubles", "matchNumber": 1, "status": "pending"},
+    {"matchType": "Doubles", "matchNumber": 2, "status": "pending"},
+    {"matchType": "Doubles", "matchNumber": 3, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 1, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 2, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 3, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 4, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 5, "status": "pending"},
+    {"matchType": "Singles", "matchNumber": 6, "status": "pending"},
+]
+
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -161,3 +173,11 @@ async def set_schedule_lineup(match_id: int, lineup: LineupInput):
         await database.execute_many(insert_query, values)
 
     return {"message": "Lineup updated"}
+
+@app.post("/livescore/{match_number}")
+async def update_livescore(match_number: int, match_data: dict):
+    for i, match in enumerate(LIVE_MATCHES):
+        if match.get("matchNumber") == match_number:
+            LIVE_MATCHES[i].update(match_data)
+            return {"message": "Match updated", "match": LIVE_MATCHES[i]}
+    raise HTTPException(status_code=404, detail="Match not found")

@@ -101,9 +101,7 @@ export default function PlayerList({ onClose }) {
         </form>
       )}
 
-      <button onClick={onClose} className="nav-button" style={{ marginTop: 20 }}>
-        Close
-      </button>
+    
     </div>
   );
 }
