@@ -155,24 +155,6 @@ async def delete_match(match_id: int):
         return {"message": "Match deleted"}
     raise HTTPException(status_code=404, detail="Match not found")
 
-@app.get("/schedule/{match_id}/lineup")
-async def get_schedule_lineup(match_id: int):
-    query = match_lineups.select().where(match_lineups.c.match_id == match_id)
-    result = await database.fetch_all(query)
-    player_ids = [row["player_id"] for row in result]
-    return {"players": player_ids}
-
-@app.post("/schedule/{match_id}/lineup")
-async def set_schedule_lineup(match_id: int, lineup: LineupInput):
-    delete_query = match_lineups.delete().where(match_lineups.c.match_id == match_id)
-    await database.execute(delete_query)
-
-    values = [{"match_id": match_id, "player_id": pid} for pid in lineup.players]
-    if values:
-        insert_query = match_lineups.insert()
-        await database.execute_many(insert_query, values)
-
-    return {"message": "Lineup updated"}
 
 @app.post("/livescore/{match_number}")
 async def update_livescore(match_number: int, match_data: dict):

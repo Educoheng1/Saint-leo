@@ -28,28 +28,86 @@ export function ScoreInput({ value, onChange, onEnter }) {
   );
 }
 
-function PlayerAssignment({ matchIndex, onSave, onClose }) {
-  const [player1, setPlayer1] = useState("");
-  const [player2, setPlayer2] = useState("");
+function PlayerAssignment({ matchIndex, matchType, onSave, onClose, playerList = [] }) {
+    const isDoubles = matchType === "Doubles";
+  
+    const [teamAPlayers, setTeamAPlayers] = useState(["", ""]);
+    const [teamBPlayers, setTeamBPlayers] = useState(["", ""]);
+  
+    const handleTeamAChange = (index, value) => {
+      const updated = [...teamAPlayers];
+      updated[index] = value;
+      setTeamAPlayers(updated);
+    };
+  
+    const handleTeamBChange = (index, value) => {
+      const updated = [...teamBPlayers];
+      updated[index] = value;
+      setTeamBPlayers(updated);
+    };
+  
+    return (
+      <div className="lineup-editor">
+        <h3 className="lineup-title">Assign Players</h3>
+  
+        <div style={{ marginBottom: "10px" }}>
+          <strong>Team A:</strong>
+          {[0, isDoubles ? 1 : null].map(
+            (i) =>
+              i !== null && (
+                <select
+                  key={i}
+                  value={teamAPlayers[i]}
+                  onChange={(e) => handleTeamAChange(i, e.target.value)}
+                  className="match-form"
+                >
+                  <option value="">Select Player {i + 1}</option>
+                  {playerList.map((p) => (
+                    <option key={p.id || p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )
+          )}
+        </div>
+  
+        <div style={{ marginBottom: "10px" }}>
+          <strong>Team B:</strong>
+          {[0, isDoubles ? 1 : null].map(
+            (i) =>
+              i !== null && (
+                <input
+                  key={i}
+                  placeholder={`Player ${i + 1}`}
+                  value={teamBPlayers[i]}
+                  onChange={(e) => handleTeamBChange(i, e.target.value)}
+                />
+              )
+          )}
+        </div>
+        <button
+  className="save-button"
+  onClick={() => {
+    const teamA = isDoubles ? teamAPlayers.join(" & ") : teamAPlayers[0];
+    const teamB = isDoubles ? teamBPlayers.join(" & ") : teamBPlayers[0];
 
-  return (
-    <div className="lineup-editor">
-      <h3 className="lineup-title">Assign Players</h3>
-      <input placeholder="Team A" value={player1} onChange={(e) => setPlayer1(e.target.value)} />
-      <input placeholder="Team B" value={player2} onChange={(e) => setPlayer2(e.target.value)} />
-      <button
-        className="save-button"
-        onClick={() => {
-          console.log("Saving from PlayerAssignment", matchIndex, player1, player2);
-          onSave(matchIndex, player1, player2);
-        }}
-      >
-        Save
-      </button>
-      <button onClick={onClose}>Cancel</button>
-    </div>
-  );
-}
+    // Ask who is serving
+    const server = window.prompt("Who is serving first? Enter A or B", "A");
+
+    const serveValue = server === "B" ? 1 : 0;
+
+    onSave(matchIndex, teamA, teamB, serveValue); // pass serve info
+  }}
+>
+  Save
+</button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    );
+  }
+  
+  
 
 function LiveScore() {
   const [nextMatch, setNextMatch] = useState(null);
@@ -58,10 +116,22 @@ function LiveScore() {
   const [editableMatches, setEditableMatches] = useState([]);
   const [showAssignIndex, setShowAssignIndex] = useState(null);
   const [teamScore, setTeamScore] = useState([0, 0]); // [Team A, Team B]
+  const [eventStarted, setEventStarted] = useState(false);
+  const [eventFinished, setEventFinished] = useState(false);
+  const [playerList, setPlayerList] = useState([]);
+
+
 
   const isAdmin = true;
 
   const isEditable = (idx) => editableMatches.includes(idx);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/players")
+      .then((res) => res.json())
+      .then(setPlayerList)
+      .catch((err) => console.error("Failed to fetch players", err));
+  }, []);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/schedule")
@@ -135,16 +205,40 @@ function LiveScore() {
             <p className="match-info">
               {nextMatch.date.toLocaleString()} — {nextMatch.opponent} ({nextMatch.location})
             </p>
-            <h2 className="page-title">Live Score</h2>
-<h3 style={{ marginBottom: 20 }}>
-  Current Score: {teamScore[0]} - {teamScore[1]}
-</h3>
+            {!eventStarted && (
+  <button className="event-button" onClick={() => setEventStarted(true)}>
+    Start Event
+  </button>
+)}
 
-            {!showScore && (
-              <button className="nav-button" onClick={handleShowScore}>
-                Show Live Score
-              </button>
-            )}
+{eventStarted && !eventFinished && (
+  <button className="event-button" onClick={() => setEventFinished(true)}>
+    Finish Event
+  </button>
+)}
+
+
+<h2 className="page-title">Live Score</h2>
+
+{eventStarted && !eventFinished ? (
+  <>
+    <h3 style={{ marginBottom: 20 }}>
+      Current Score: {teamScore[0]} - {teamScore[1]}
+    </h3>
+
+    {!showScore && (
+      <button className="nav-button" onClick={handleShowScore}>
+        Show Live Score
+      </button>
+    )}
+  </>
+) : eventFinished ? (
+  <p style={{ color: "gray" }}>The event has finished. Live scores are no longer available.</p>
+) : (
+  <p style={{ color: "red" }}>You must start the event to view live scores.</p>
+)}
+
+
           </>
         )}
       </div>
@@ -282,25 +376,28 @@ function LiveScore() {
             }}>
               <PlayerAssignment
                 matchIndex={showAssignIndex}
-                onSave={(idx, p1, p2) => {
-                  const updated = [...scores];
-                  if (!updated[idx]) {
-                    console.error("Invalid idx:", idx, "scores:", updated);
-                    return;
-                  }
-                  updated[idx].player1 = p1;
-                  updated[idx].player2 = p2;
-                  updated[idx].started = true;
-                  updated[idx].status = "live";  
-                  updated[idx].sets =
-                updated[idx].matchType === "Singles"
-                       ? [[0, 0], [0, 0], [0, 0]]
-                         : [[0, 0]];
-                  updated[idx].currentGame = [0, 0];
-                  setScores(updated);
-                  setShowAssignIndex(null);
-                }}
+                matchType={scores[showAssignIndex]?.matchType}
+                onSave={(idx, p1, p2, serveValue) => {
+                    const updated = [...scores];
+                    if (!updated[idx]) return;
+                  
+                    updated[idx].player1 = p1;
+                    updated[idx].player2 = p2;
+                    updated[idx].started = true;
+                    updated[idx].status = "live";
+                    updated[idx].sets =
+                      updated[idx].matchType === "Singles"
+                        ? [[0, 0], [0, 0], [0, 0]]
+                        : [[0, 0]];
+                    updated[idx].currentGame = [0, 0];
+                    updated[idx].currentServe = serveValue;
+                  
+                    setScores(updated);
+                    setShowAssignIndex(null);
+                  }}
+                  
                 onClose={() => setShowAssignIndex(null)}
+                playerList={playerList}
               />
             </div>
           )}
