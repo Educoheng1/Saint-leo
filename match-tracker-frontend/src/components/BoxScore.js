@@ -1,8 +1,14 @@
-// BoxScore.js
 import React from "react";
 import "../styles.css";
+import { useAdmin } from "../AdminContext"; // <-- import the admin context
 
 export default function BoxScore({ match, onClose }) {
+  const { isAdmin } = useAdmin(); // <-- get isAdmin value
+
+  if (!isAdmin) {
+    return null; // or return a message like: return <p>Access denied.</p>;
+  }
+
   if (!match || !match.boxScore) return null;
 
   return (

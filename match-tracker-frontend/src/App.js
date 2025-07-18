@@ -5,25 +5,42 @@ import PlayerList from "./components/PlayerList";
 import LiveScore from "./components/LiveScore";
 import Home from './components/Home';
 import Admin from "./Admin";
-import RoleSelector from "./components/RoleSelector"; // adjust path if needed
+import RoleSelector from "./components/RoleSelector";
+import { AdminProvider, useAdmin } from './AdminContext'; // NEW
 
-function App() {
-  const [role, setRole] = useState(null);
+function AppContent() {
+  const [roleSelected, setRoleSelected] = useState(false);
+  const { setIsAdmin } = useAdmin();
 
-  if (!role) {
-    return <RoleSelector onSelect={setRole} />;
+  if (!roleSelected) {
+    return (
+      <RoleSelector
+        onSelect={(role) => {
+          setIsAdmin(role === 'admin');
+          setRoleSelected(true);
+        }}
+      />
+    );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/schedule" element={<Schedule />} />
-        <Route path="/players" element={<PlayerList />} />
-        <Route path="/livescore" element={<LiveScore />} />
-        <Route path="/admin" element={<Admin />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/schedule" element={<Schedule />} />
+      <Route path="/players" element={<PlayerList />} />
+      <Route path="/livescore" element={<LiveScore />} />
+      <Route path="/admin" element={<Admin />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <AdminProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </AdminProvider>
   );
 }
 

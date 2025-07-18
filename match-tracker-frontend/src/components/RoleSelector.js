@@ -40,16 +40,22 @@ export default function RoleSelector({ onSelect }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "300px", width: "100%" }}>
           <input
-            type="password"
-            placeholder="Enter Admin Password"
-            value={inputPassword}
-            onChange={(e) => setInputPassword(e.target.value)}
-            className="match-form input"
-          />
+  type="password"
+  placeholder="Enter Admin Password"
+  value={inputPassword}
+  onChange={(e) => setInputPassword(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      handlePasswordSubmit();
+    }
+  }}
+  className="match-form input"
+/>
           <button onClick={handlePasswordSubmit} className="nav-button">
             Enter
           </button>
           {error && <p style={{ color: "red" }}>{error}</p>}
+        
         </div>
       )}
     </div>

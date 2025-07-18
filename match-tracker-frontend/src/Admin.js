@@ -1,10 +1,10 @@
-// src/Admin.js
 import React, { useState, useEffect } from "react";
-import { ScoreInput } from "./components/LiveScore"; // reuse your component
+import { ScoreInput } from "./components/LiveScore";
+import { useAdmin } from "./AdminContext"; // 👈 import isAdmin
 
 export default function Admin() {
+  const { isAdmin } = useAdmin();
   const [matches, setMatches] = useState([]);
-
   const [newPlayer, setNewPlayer] = useState({ name: "", country: "" });
 
   useEffect(() => {
@@ -30,6 +30,11 @@ export default function Admin() {
       setNewPlayer({ name: "", country: "" });
     });
   };
+
+  // 👇 block guest users
+  if (!isAdmin) {
+    return <div style={{ padding: 20 }}>Access denied. Admins only.</div>;
+  }
 
   return (
     <div style={{ padding: 20 }}>

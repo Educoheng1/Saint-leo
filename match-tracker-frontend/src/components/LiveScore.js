@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from "react";
 import "../styles.css";
+import { useAdmin } from "../AdminContext"; 
+import BackButton from "./BackButton";
 
 export function ScoreInput({ value, onChange, onEnter }) {
   const [focused, setFocused] = useState(false);
@@ -122,7 +124,7 @@ function LiveScore() {
 
 
 
-  const isAdmin = true;
+  const { isAdmin } = useAdmin();
 
   const isEditable = (idx) => editableMatches.includes(idx);
 
@@ -195,6 +197,7 @@ function LiveScore() {
 
   return (
     <div style={{ padding: 20 }}>
+         <BackButton />
       <h2 className="page-title">Live Score</h2>
       <div className="next-match-container">
         {!nextMatch ? (
@@ -205,17 +208,18 @@ function LiveScore() {
             <p className="match-info">
               {nextMatch.date.toLocaleString()} — {nextMatch.opponent} ({nextMatch.location})
             </p>
-            {!eventStarted && (
+            {isAdmin && !eventStarted && (
   <button className="event-button" onClick={() => setEventStarted(true)}>
     Start Event
   </button>
 )}
 
-{eventStarted && !eventFinished && (
+{isAdmin && eventStarted && !eventFinished && (
   <button className="event-button" onClick={() => setEventFinished(true)}>
     Finish Event
   </button>
 )}
+
 
 
 <h2 className="page-title">Live Score</h2>
@@ -244,19 +248,20 @@ function LiveScore() {
       </div>
 
       {showScore && (
-        <>
-          <div className="match-list">
-            {scores.map((score, idx) => {
-              if (!score.started) {
-                return (
-                  <div key={idx} className="match-status-box not-started">
-                    <h3>{score.matchType} #{score.matchNumber}</h3>
-                    <button className="nav-button" onClick={() => setShowAssignIndex(idx)}>
-                      Assign Players & Start
-                    </button>
-                  </div>
-                );
-              }
+  <>
+    <div className="match-list">
+      {scores.map((score, idx) => {
+        if (!score.started) {
+          // ✅ Admins see the match box and the assign button
+          return isAdmin ? (
+            <div key={idx} className="match-status-box not-started">
+              <h3>{score.matchType} #{score.matchNumber}</h3>
+              <button className="nav-button" onClick={() => setShowAssignIndex(idx)}>
+                Assign Players & Start
+              </button>
+            </div>
+          ) : null; // 👈 guests see nothing
+        }
 
               const sets = score.sets || [];
               const currentGame = score.currentGame || [null, null];

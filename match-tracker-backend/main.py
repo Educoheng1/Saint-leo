@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from sqlalchemy import create_engine
-from models import players, matches, match_lineups, database # SQLAlchemy tables
+from models import players, matches, match_lineups, database,sets # SQLAlchemy tables
 from db_setup import  metadata # shared db + metadata
 from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import Depends
+from models import scoreboxes, database
 
 # Setup SQLite database
 DATABASE_URL = "sqlite:///./matches.db"
@@ -78,6 +79,20 @@ class ScoreUpdate(BaseModel):
     set1: list
     set2: list
 
+class ScoreBox(BaseModel):
+    match_id: int
+    player1_id: int
+    player2_id: Optional[int] = None
+    opponent1_id: int
+    opponent2_id: Optional[int] = None
+    match_number: int
+    match_type: str  # "singles" or "doubles"
+    winner: Optional[str] = None  # "team", "opponent", or None
+
+class SetInput(BaseModel):
+    set_number: int
+    team_score: int
+    opponent_score: int
 
 live_scores: List[Dict] = []  # in-memory storage
 # Routes
@@ -163,3 +178,45 @@ async def update_livescore(match_number: int, match_data: dict):
             LIVE_MATCHES[i].update(match_data)
             return {"message": "Match updated", "match": LIVE_MATCHES[i]}
     raise HTTPException(status_code=404, detail="Match not found")
+
+@app.post("/scoreboxes")
+async def create_scorebox(entry: ScoreBox):
+    query = scoreboxes.insert().values(
+        match_id=entry.match_id,
+        player1_id=entry.player1_id,
+        player2_id=entry.player2_id,
+        opponent1_id=entry.opponent1_id,
+        opponent2_id=entry.opponent2_id,
+        match_number=entry.match_number,
+        match_type=entry.match_type,
+        winner=entry.winner
+    )
+    new_id = await database.execute(query)
+    return {"id": new_id}
+
+@app.get("/scoreboxes/{match_id}")
+async def get_scoreboxes(match_id: int):
+    query = scoreboxes.select().where(scoreboxes.c.match_id == match_id)
+    results = await database.fetch_all(query)
+    return results
+
+@app.post("/scoreboxes/{scorebox_id}/sets")
+async def add_sets(scorebox_id: int, sets_input: List[SetInput]):
+    queries = [
+        sets.insert().values(
+            scorebox_id=scorebox_id,
+            set_number=s.set_number,
+            team_score=s.team_score,
+            opponent_score=s.opponent_score,
+        )
+        for s in sets_input
+    ]
+    for query in queries:
+        await database.execute(query)
+    return {"message": f"{len(queries)} sets added for scorebox {scorebox_id}"}
+
+@app.get("/scoreboxes/{scorebox_id}/sets")
+async def get_sets(scorebox_id: int):
+    query = sets.select().where(sets.c.scorebox_id == scorebox_id)
+    result = await database.fetch_all(query)
+    return result
