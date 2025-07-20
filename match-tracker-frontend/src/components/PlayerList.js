@@ -54,6 +54,25 @@ export default function PlayerList({ onClose }) {
     }
   };
 
+  async function startEvent(matchId, player1, player2) {
+    const response = await fetch("http://127.0.0.1:8000/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        match_id: matchId,
+        player1: player1,
+        player2: player2,
+        sets: [[0, 0]],
+        current_game: [0, 0],
+        status: "live",
+        started: true,
+        current_serve: 0,
+      }),
+    });
+    const data = await response.json();
+    console.log("Event created:", data);
+  }
+
   const handleDelete = async (id) => {
     const confirm = window.confirm("Are you sure you want to delete this player?");
     if (!confirm) return;

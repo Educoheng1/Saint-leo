@@ -143,10 +143,68 @@ function LiveScore() {
           .map((match) => ({ ...match, date: new Date(match.date) }))
           .filter((match) => match.date > new Date())
           .sort((a, b) => a.date - b.date);
-        setNextMatch(upcoming[0]);
+        setNextMatch(upcoming[0]); // Corrected the set function
       })
       .catch((err) => console.error("Failed to load schedule:", err));
   }, []);
+  
+  const handleStartMatch = async () => {
+    try {
+      // Update match status to "live"
+      const matchResponse = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!matchResponse.ok) throw new Error("Failed to start match");
+      const matchData = await matchResponse.json();
+      console.log("Match started:", matchData);
+  
+      // Create or update an event in the events table
+      const eventPayload = {
+        match_id: nextMatch.id,
+        player1: nextMatch.player1 || "Player 1",
+        player2: nextMatch.player2 || "Player 2",
+        sets: [[0, 0], [0, 0], [0, 0]], // Default sets
+        current_game: [0, 0], // Default current game
+        status: "live",
+        started: true,
+        current_serve: 0, // Default serve
+      };
+  
+      let eventResponse;
+      if (!nextMatch.eventId) {
+        // Create a new event
+        eventResponse = await fetch(`http://127.0.0.1:8000/events/${nextMatch.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(eventPayload),
+        });
+        console.log("Creating new event:", eventPayload);
+      } else {
+        // Update existing event
+        eventResponse = await fetch(`http://127.0.0.1:8000/events/${nextMatch.eventId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(eventPayload),
+        });
+        console.log("Updating existing event:", eventPayload);
+      }
+  
+      if (!eventResponse.ok) throw new Error("Failed to create or update event");
+      const eventData = await eventResponse.json();
+      console.log("Event response:", eventData);
+  
+      // Update local state
+      setNextMatch((prev) => ({
+        ...prev,
+        status: "live",
+        eventId: eventData.id, // Save event ID for future updates
+      }));
+    } catch (error) {
+      console.error("Error starting event:", error);
+    }
+  };
+
 
   const fetchScore = () => {
     const matchTemplate = [
@@ -178,26 +236,36 @@ function LiveScore() {
     setShowScore(true);
     fetchScore();
   };
-
-  const handleSave = (idx) => {
+  const handleSave = async (idx) => {
     setEditableMatches((prev) => prev.filter((i) => i !== idx));
     const updatedMatch = scores[idx];
-    fetch(`http://127.0.0.1:8000/livescore/${updatedMatch.matchNumber}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedMatch),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to save");
-        return res.json();
-      })
-      .then((data) => console.log("Saved match:", data))
-      .catch((err) => console.error("Failed to save match:", err));
+  
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/events/${updatedMatch.eventId}`, {
+        method: "PUT", // Use PUT for updates
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id: updatedMatch.match_id,
+          player1: updatedMatch.player1,
+          player2: updatedMatch.player2,
+          sets: updatedMatch.sets,
+          current_game: updatedMatch.currentGame,
+          status: updatedMatch.status,
+          started: updatedMatch.started,
+          current_serve: updatedMatch.currentServe,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to update event data");
+      const data = await response.json();
+      console.log("Event updated:", data);
+    } catch (err) {
+      console.error("Failed to update event:", err);
+    }
   };
 
   return (
     <div style={{ padding: 20 }}>
-         <BackButton />
+      <BackButton />
       <h2 className="page-title">Live Score</h2>
       <div className="next-match-container">
         {!nextMatch ? (
@@ -209,16 +277,19 @@ function LiveScore() {
               {nextMatch.date.toLocaleString()} — {nextMatch.opponent} ({nextMatch.location})
             </p>
             {isAdmin && !eventStarted && (
-  <button className="event-button" onClick={() => setEventStarted(true)}>
+  <button className="event-button" onClick={() => {
+    handleStartMatch();
+    setEventStarted(true);
+  }}>
     Start Event
   </button>
 )}
 
-{isAdmin && eventStarted && !eventFinished && (
-  <button className="event-button" onClick={() => setEventFinished(true)}>
-    Finish Event
-  </button>
-)}
+            {isAdmin && eventStarted && !eventFinished && (
+              <button className="event-button" onClick={() => setEventFinished(true)}>
+                Finish Event
+              </button>
+            )}
 
 
 
@@ -379,31 +450,88 @@ function LiveScore() {
               padding: 20,
               border: "2px solid black"
             }}>
-              <PlayerAssignment
-                matchIndex={showAssignIndex}
-                matchType={scores[showAssignIndex]?.matchType}
-                onSave={(idx, p1, p2, serveValue) => {
-                    const updated = [...scores];
-                    if (!updated[idx]) return;
-                  
-                    updated[idx].player1 = p1;
-                    updated[idx].player2 = p2;
-                    updated[idx].started = true;
-                    updated[idx].status = "live";
-                    updated[idx].sets =
-                      updated[idx].matchType === "Singles"
-                        ? [[0, 0], [0, 0], [0, 0]]
-                        : [[0, 0]];
-                    updated[idx].currentGame = [0, 0];
-                    updated[idx].currentServe = serveValue;
-                  
-                    setScores(updated);
-                    setShowAssignIndex(null);
-                  }}
-                  
-                onClose={() => setShowAssignIndex(null)}
-                playerList={playerList}
-              />
+<PlayerAssignment
+  matchIndex={showAssignIndex}
+  matchType={scores[showAssignIndex]?.matchType}
+  onSave={async (idx, p1, p2, serveValue) => {
+    const updated = [...scores];
+    if (!updated[idx]) return;
+  
+    updated[idx].player1 = p1;
+    updated[idx].player2 = p2;
+    updated[idx].started = true;
+    updated[idx].status = "live";
+    updated[idx].sets =
+      updated[idx].matchType === "Singles"
+        ? [[0, 0], [0, 0], [0, 0]]
+        : [[0, 0]];
+    updated[idx].currentGame = [0, 0];
+    updated[idx].currentServe = serveValue;
+  
+    setScores(updated);
+    setShowAssignIndex(null);
+  
+    // Use nextMatch.id as the match ID (because this is the active match)
+    const matchId = nextMatch?.id;
+    if (!matchId) {
+      console.error("No match ID available for creating the event.");
+      return;
+    }
+  
+    // Create a new event in the backend
+    try {
+      const payload = {
+        player1: p1,
+        player2: p2,
+        sets: updated[idx].sets,
+        current_game: updated[idx].currentGame,
+        status: "live",
+        started: true,
+        current_serve: serveValue,
+      };
+  
+      console.log("Creating event with:", payload);
+  
+      let response;
+
+      if (!updated[idx].eventId) {
+        console.log("Creating new event for matchId:", matchId);
+        response = await fetch(`http://127.0.0.1:8000/events/${matchId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        console.log("Response from event creation:", response);
+      }if (updated[idx].eventId) {
+        console.log("Updating existing event with eventId:", updated[idx].eventId);
+        response = await fetch(`http://127.0.0.1:8000/events/${updated[idx].eventId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        console.log("Response from event update:", response);
+      }
+      
+  
+      if (!response.ok) throw new Error("Failed to create event");
+      const data = await response.json();
+      console.log("Event response:", data);
+  
+        if (!updated[idx].eventId && data.id) {
+            updated[idx].eventId = data.id;
+          } // Only save if it's a new event
+      
+      setScores(updated); // update with new eventId
+      console.log("Updated scores:", updated);
+
+    } catch (error) {
+      console.error("Error creating event:", error);
+    }
+  }}
+  
+  onClose={() => setShowAssignIndex(null)}
+  playerList={playerList}
+/>
             </div>
           )}
         </>

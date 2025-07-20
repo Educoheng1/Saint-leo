@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from sqlalchemy import create_engine
-from models import players, matches, match_lineups, database,sets # SQLAlchemy tables
+from models import players, matches, match_lineups, database,sets, events # SQLAlchemy tables
 from db_setup import  metadata # shared db + metadata
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -56,14 +56,11 @@ class LineupInput(BaseModel):
     players: list[int]
 
 class Match(BaseModel):
-    id: int
-    date: datetime
+    date: str  # or datetime if you use from datetime import datetime
     opponent: str
     location: str
-    status: Optional[str] = "scheduled"
-    team_score: Optional[List[int]] = None
-    box_score: Optional[List[Dict]] = None
-
+    status: str = "scheduled"  # Optional default
+    match_number: int
 
 class Player(BaseModel):
     name: str
@@ -89,10 +86,48 @@ class ScoreBox(BaseModel):
     match_type: str  # "singles" or "doubles"
     winner: Optional[str] = None  # "team", "opponent", or None
 
+
 class SetInput(BaseModel):
     set_number: int
     team_score: int
     opponent_score: int
+
+class Event(BaseModel):
+    match_id: int  # FK to matches.id
+    player1_id: int  # FK to players.id
+    player2_id: Optional[int] = None  # FK to players.id (nullable for singles)
+    opponent1_id: int  # FK to players.id
+    opponent2_id: Optional[int] = None  # FK to players.id (nullable for singles)
+    match_number: int  # e.g., 1 for Singles 1, 2 for Doubles 1, etc.
+    match_type: str  # "singles" or "doubles"
+    sets: List[Dict[str, int]] = []  # List of sets with scores (team vs opponent)
+    current_game: List[int] = [0, 0]  # Current game score [team, opponent]
+    status: str = "pending"  # "live", "completed", or "pending"
+    started: bool = False  # Whether the event has started
+    current_serve: Optional[int] = None  # 0 for player1/team, 1 for opponent
+
+class MatchIn(BaseModel):
+    id: int
+    date: str
+    opponent: str
+    location: str
+    status: str
+    match_number: int
+
+class MatchOut(BaseModel):
+    id: int
+    date: datetime
+    opponent: str
+    location: str
+    status: str
+    match_number: int
+
+@app.get("/schedule", response_model=List[MatchOut])
+async def get_schedule():
+    query = matches.select()
+    results = await database.fetch_all(query)
+    return results
+
 
 live_scores: List[Dict] = []  # in-memory storage
 # Routes
@@ -101,12 +136,6 @@ async def root():
     return {"message": "Match Tracker API is running!"}
 
 
-@app.post("/livescore")
-async def update_livescore(request: Request):
-    data = await request.json()
-    global live_scores
-    live_scores = data
-    return {"status": "updated", "count": len(live_scores)}
 
 @app.get("/livescore")
 def get_livescore():
@@ -132,20 +161,15 @@ async def get_players():
 @app.post("/schedule")
 async def create_match(match: Match):
     query = matches.insert().values(
-        id=match.id,
-        date=match.date,
+        date=datetime.fromisoformat(match.date),
         opponent=match.opponent,
         location=match.location,
-        status=match.status or "scheduled"  # Add status here
+        status=match.status or "scheduled",
+        match_number=match.match_number,
     )
     new_id = await database.execute(query)
-    return {"id": new_id}
+    return {"id": new_id, "message": "Match created"}
 
-@app.get("/schedule", response_model=List[Match])
-async def get_schedule():
-    query = matches.select()
-    results = await database.fetch_all(query)
-    return results
 
 @app.delete("/players/{player_id}")
 async def delete_player(player_id: int):
@@ -170,14 +194,6 @@ async def delete_match(match_id: int):
         return {"message": "Match deleted"}
     raise HTTPException(status_code=404, detail="Match not found")
 
-
-@app.post("/livescore/{match_number}")
-async def update_livescore(match_number: int, match_data: dict):
-    for i, match in enumerate(LIVE_MATCHES):
-        if match.get("matchNumber") == match_number:
-            LIVE_MATCHES[i].update(match_data)
-            return {"message": "Match updated", "match": LIVE_MATCHES[i]}
-    raise HTTPException(status_code=404, detail="Match not found")
 
 @app.post("/scoreboxes")
 async def create_scorebox(entry: ScoreBox):
@@ -220,3 +236,82 @@ async def get_sets(scorebox_id: int):
     query = sets.select().where(sets.c.scorebox_id == scorebox_id)
     result = await database.fetch_all(query)
     return result
+@app.post("/events/{match_id}")
+async def start_event(match_id: int, event_data: dict):
+    # Check if an event already exists for the given match_id
+    existing_event = await database.fetch_one(events.select().where(events.c.match_id == match_id))
+    if existing_event:
+        return {"id": existing_event["id"], "message": "Event already exists", "event": existing_event}
+
+    # Create a new event if none exists
+    query = events.insert().values(
+        match_id=match_id,
+        player1=event_data.get("player1"),
+        player2=event_data.get("player2"),
+        sets=event_data.get("sets", [[0, 0]]),
+        current_game=event_data.get("current_game", [0, 0]),
+        status=event_data.get("status", "pending"),
+        started=event_data.get("started", False),
+        current_serve=event_data.get("current_serve"),
+    )
+    new_id = await database.execute(query)
+    new_event = await database.fetch_one(events.select().where(events.c.id == new_id))
+    return {"id": new_id, "message": "Event created", "event": new_event}
+
+@app.post("/events/{match_id}")
+async def start_event(match_id: int, event_data: dict):
+    query = events.insert().values(
+        match_id=match_id,
+        player1=event_data.get("player1"),
+        player2=event_data.get("player2"),
+        sets=event_data.get("sets", [[0, 0]]),
+        current_game=event_data.get("current_game", [0, 0]),
+        status=event_data.get("status", "live"),
+        started=event_data.get("started", True),
+        current_serve=event_data.get("current_serve"),
+    )
+    new_id = await database.execute(query)
+    new_event = await database.fetch_one(events.select().where(events.c.id == new_id))
+    return {"id": new_id, "message": "Event created", "event": new_event}
+
+@app.get("/events/{event_id}")
+async def get_event(event_id: int):
+    query = events.select().where(events.c.id == event_id)
+    event = await database.fetch_one(query)
+    if event:
+        return event
+    raise HTTPException(status_code=404, detail="Event not found")
+
+@app.post("/schedule/{match_id}/start")
+async def start_event(match_id: int):
+    query = matches.update().where(matches.c.id == match_id).values(
+        status="live"
+    )
+    result = await database.execute(query)
+    if result:
+        updated_match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
+        return {"message": "Match started", "match": updated_match}
+    raise HTTPException(status_code=404, detail="Match not found")
+
+@app.put("/events/{event_id}")
+async def update_event(event_id: int, event_data: dict):
+    # Check if the event exists
+    existing_event = await database.fetch_one(events.select().where(events.c.id == event_id))
+    if not existing_event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Update the event
+    query = events.update().where(events.c.id == event_id).values(
+        player1=event_data.get("player1"),
+        player2=event_data.get("player2"),
+        sets=event_data.get("sets"),
+        current_game=event_data.get("current_game"),
+        status=event_data.get("status"),
+        started=event_data.get("started"),
+        current_serve=event_data.get("current_serve"),
+    )
+    await database.execute(query)
+
+    # Fetch the updated event
+    updated_event = await database.fetch_one(events.select().where(events.c.id == event_id))
+    return {"message": "Event updated", "event": updated_event}

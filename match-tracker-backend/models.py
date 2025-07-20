@@ -1,7 +1,7 @@
 from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, JSON,ForeignKey
 from sqlalchemy import create_engine
 from databases import Database
-
+ 
 DATABASE_URL = "sqlite:///./matches.db"
 
 database = Database(DATABASE_URL)
@@ -19,12 +19,13 @@ matches = Table(
     Column("status", String, default="scheduled"),
     Column("team_score", JSON, nullable=True),
     Column("box_score", JSON, nullable=True),
+    Column("match_number", Integer, nullable=False),  # Add match_number column
 )
 
 players = Table(
     "players",
     metadata,
-    Column("id", Integer, primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column("name", String),
     Column("year", String),  # e.g., Freshman, Sophomore, Junior, Senior
     Column("singles_season", String),       # e.g., "6-3"
@@ -62,4 +63,17 @@ sets = Table(
     Column("set_number", Integer),
     Column("team_score", Integer),
     Column("opponent_score", Integer),
+)
+events = Table(
+    "events",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("match_id", Integer, ForeignKey("matches.id"), nullable=False),  # FK to matches table
+    Column("player1", String, nullable=True),
+    Column("player2", String, nullable=True),
+    Column("sets", JSON, nullable=True),       # JSON to store sets data
+    Column("current_game", JSON, nullable=True),  # JSON to store current game score
+    Column("status", String, nullable=False, default="pending"),  # e.g., 'live', 'completed'
+    Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
+    Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
 )

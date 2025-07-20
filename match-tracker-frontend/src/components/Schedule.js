@@ -73,22 +73,32 @@ export function Schedule({
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const response = await fetch("http://127.0.0.1:8000/schedule", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newMatch, id: parseInt(newMatch.id) }),
-    });
-
-    if (response.ok) {
-      const created = await response.json();
-      setMatches([...matches, { ...newMatch, id: created.id }]);
-      setShowForm(false);
-      setNewMatch({ id: "", date: "", opponent: "", location: "" });
-    } else {
-      alert("Failed to add match.");
+    e.preventDefault(); // prevent form reload
+    try {
+      const response = await fetch("http://localhost:8000/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: new Date(newMatch.date).toISOString(),
+          opponent: newMatch.opponent,
+          location: newMatch.location,
+          status: "scheduled",
+          match_number: Date.now(), // you can change this logic if needed
+        }),
+      });
+  
+      if (!response.ok) throw new Error("Failed to create match");
+  
+      const data = await response.json();
+      console.log("Match created:", data);
+      setShowForm(false);         // hide form after success
+      setNewMatch({ id: "", date: "", opponent: "", location: "" }); // reset form
+      fetchMatches();             // refresh match list
+    } catch (error) {
+      console.error("Error creating match:", error);
     }
   };
+  
 
   const handleDeleteMatch = async (id) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this match?");
@@ -120,7 +130,6 @@ export function Schedule({
 
       {isAdmin && showForm && (
         <form onSubmit={handleSubmit} className="match-form" style={{ marginTop: 10 }}>
-          <input name="id" placeholder="ID" value={newMatch.id} onChange={handleChange} required />
           <input type="datetime-local" name="date" value={newMatch.date} onChange={handleChange} required />
           <input name="opponent" placeholder="Opponent" value={newMatch.opponent} onChange={handleChange} required />
           <input name="location" placeholder="Location" value={newMatch.location} onChange={handleChange} required />
