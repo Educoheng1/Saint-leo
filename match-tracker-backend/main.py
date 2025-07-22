@@ -258,10 +258,10 @@ async def start_event(match_id: int, event_data: dict):
     new_event = await database.fetch_one(events.select().where(events.c.id == new_id))
     return {"id": new_id, "message": "Event created", "event": new_event}
 
-@app.post("/events/{match_id}")
-async def start_event(match_id: int, event_data: dict):
+@app.post("/events")
+async def create_event(event_data: dict):
     query = events.insert().values(
-        match_id=match_id,
+        match_id=event_data["match_id"],  # taken from body
         player1=event_data.get("player1"),
         player2=event_data.get("player2"),
         sets=event_data.get("sets", [[0, 0]]),
@@ -315,3 +315,25 @@ async def update_event(event_id: int, event_data: dict):
     # Fetch the updated event
     updated_event = await database.fetch_one(events.select().where(events.c.id == event_id))
     return {"message": "Event updated", "event": updated_event}
+
+@app.get("/events/match/{match_id}")
+async def get_events_for_match(match_id: int):
+    query = events.select().where(events.c.match_id == match_id)
+    events_list = await database.fetch_all(query)
+    return events_list
+
+@app.post("/schedule/{match_id}/complete")
+async def complete_event(match_id: int):
+    query = matches.update().where(matches.c.id == match_id).values(
+        status="completed"
+    )
+    result = await database.execute(query)
+    if result:
+        updated_match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
+        return {"message": "Match completed", "match": updated_match}
+    raise HTTPException(status_code=404, detail="Match not found")
+@app.delete("/events/match/{match_id}")
+async def delete_events_by_match_id(match_id: int):
+    query = events.delete().where(events.c.match_id == match_id)
+    await database.execute(query)
+    return {"message": f"Events for match {match_id} deleted"}

@@ -422,4 +422,23 @@
     background-color: #006341;
     color: white;
   }
-      
+  .logout-button {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: #e63946;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s ease;
+  }
+  
+  .logout-button:hover {
+    background-color: #d62828;
+  }
+        

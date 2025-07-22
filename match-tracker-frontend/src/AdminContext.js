@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useState } from 'react';
+// AdminContext.js
+import { createContext, useContext, useEffect, useState } from "react";
 
 const AdminContext = createContext();
 
 export function AdminProvider({ children }) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem("isAdmin") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("isAdmin", isAdmin);
+  }, [isAdmin]);
 
   return (
     <AdminContext.Provider value={{ isAdmin, setIsAdmin }}>
@@ -12,6 +19,4 @@ export function AdminProvider({ children }) {
   );
 }
 
-export function useAdmin() {
-  return useContext(AdminContext);
-}
+export const useAdmin = () => useContext(AdminContext);

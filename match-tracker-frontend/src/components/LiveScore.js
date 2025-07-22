@@ -150,92 +150,204 @@ function LiveScore() {
   
   const handleStartMatch = async () => {
     try {
-      // Update match status to "live"
       const matchResponse = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
+  
       if (!matchResponse.ok) throw new Error("Failed to start match");
       const matchData = await matchResponse.json();
-      console.log("Match started:", matchData);
+      console.log("Team match started:", matchData);
   
-      // Create or update an event in the events table
-      const eventPayload = {
-        match_id: nextMatch.id,
-        player1: nextMatch.player1 || "Player 1",
-        player2: nextMatch.player2 || "Player 2",
-        sets: [[0, 0], [0, 0], [0, 0]], // Default sets
-        current_game: [0, 0], // Default current game
-        status: "live",
-        started: true,
-        current_serve: 0, // Default serve
-      };
+      const updated = [...scores];
   
-      let eventResponse;
-      if (!nextMatch.eventId) {
-        // Create a new event
-        eventResponse = await fetch(`http://127.0.0.1:8000/events/${nextMatch.id}`, {
+      for (let idx = 0; idx < updated.length; idx++) {
+        const match = updated[idx];
+  
+        const payload = {
+          match_id: nextMatch.id,         // Shared for all events
+          player1: "",                    // Unknown at start
+          player2: "",
+          sets: [],
+          current_game: [0, 0],
+          status: "pending",
+          started: false,
+          current_serve: null,
+        };
+  
+        const eventRes = await fetch(`http://127.0.0.1:8000/events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(eventPayload),
+          body: JSON.stringify(payload),
         });
-        console.log("Creating new event:", eventPayload);
-      } else {
-        // Update existing event
-        eventResponse = await fetch(`http://127.0.0.1:8000/events/${nextMatch.eventId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(eventPayload),
-        });
-        console.log("Updating existing event:", eventPayload);
+  
+        if (!eventRes.ok) {
+          console.error(`❌ Failed to create event for match ${idx}`, await eventRes.text());
+          continue;
+        }
+  
+        const eventData = await eventRes.json();
+        console.log(`✅ Created empty event for match ${idx + 1}:`, eventData);
+  
+        updated[idx].eventId = eventData.id;
+        updated[idx].status = "pending";
+        updated[idx].started = false;
+        updated[idx].sets = [];
+        updated[idx].currentGame = [0, 0];
+        updated[idx].currentServe = null;
       }
   
-      if (!eventResponse.ok) throw new Error("Failed to create or update event");
-      const eventData = await eventResponse.json();
-      console.log("Event response:", eventData);
+      setScores(updated);
+      setEventStarted(true);
+     
   
-      // Update local state
-      setNextMatch((prev) => ({
-        ...prev,
-        status: "live",
-        eventId: eventData.id, // Save event ID for future updates
-      }));
     } catch (error) {
-      console.error("Error starting event:", error);
+      console.error("Error starting all events:", error);
     }
   };
+  
+  
+  useEffect(() => {
+    const checkEventStarted = async () => {
+      if (!nextMatch?.id) return;
+  
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`);
+        const events = await res.json();
+  
+        if (events.length > 0) {
+          setEventStarted(true);
+      
+          const restoredScores = events.map((e, idx) => ({
+            match_id: e.match_id,
+            eventId: e.id,
+            player1: e.player1,
+            player2: e.player2,
+            sets: e.sets,
+            currentGame: e.current_game,
+            status: e.status,
+            started: e.started,
+            currentServe: e.current_serve,
+            matchType: e.sets.length === 3 ? "Singles" : "Doubles",
+            matchNumber: idx + 1,
+          }));
+          setScores(restoredScores);
+          console.log("✅ Restored match from DB:", restoredScores);
+        } else {
+          console.log("🟡 No events found for this match");
+        }
+      } catch (err) {
+        console.error("❌ Error fetching event data:", err);
+      }
+    };
+  
+    checkEventStarted();
+  }, [nextMatch]);
+  
+  
 
-
-  const fetchScore = () => {
-    const matchTemplate = [
-      { matchType: "Doubles", matchNumber: 1 },
-      { matchType: "Doubles", matchNumber: 2 },
-      { matchType: "Doubles", matchNumber: 3 },
-      { matchType: "Singles", matchNumber: 1 },
-      { matchType: "Singles", matchNumber: 2 },
-      { matchType: "Singles", matchNumber: 3 },
-      { matchType: "Singles", matchNumber: 4 },
-      { matchType: "Singles", matchNumber: 5 },
-      { matchType: "Singles", matchNumber: 6 },
-    ];
-
-    const emptyMatches = matchTemplate.map((m) => ({
-      ...m,
-      player1: null,
-      player2: null,
-      sets: [],
-      currentGame: [],
-      status: "pending",
-      started: false,
-    }));
-
-    setScores(emptyMatches);
+  const fetchScore = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/schedule");
+      const schedule = await res.json();
+  
+      const matchTemplate = [
+        { matchType: "Doubles", matchNumber: 1 },
+        { matchType: "Doubles", matchNumber: 2 },
+        { matchType: "Doubles", matchNumber: 3 },
+        { matchType: "Singles", matchNumber: 1 },
+        { matchType: "Singles", matchNumber: 2 },
+        { matchType: "Singles", matchNumber: 3 },
+        { matchType: "Singles", matchNumber: 4 },
+        { matchType: "Singles", matchNumber: 5 },
+        { matchType: "Singles", matchNumber: 6 },
+      ];
+  
+      const enriched = matchTemplate.map((template) => {
+        const backendMatch = schedule.find(
+          (m) =>
+            m.match_type === template.matchType &&
+            m.match_number === template.matchNumber
+        );
+  
+        return {
+          ...template,
+          match_id: backendMatch?.id,
+          player1: backendMatch?.player1 || null,
+          player2: backendMatch?.player2 || null,
+          sets: [],
+          currentGame: [],
+          status: "pending",
+          started: false,
+        };
+      });
+  
+      console.log("Enriched match list with match IDs:", enriched.map((m) => m.match_id));
+      setScores(enriched);
+    } catch (err) {
+      console.error("Failed to fetch scores", err);
+    }
   };
+  
+const handleShowScore = async () => {
+  setShowScore(true);
 
-  const handleShowScore = () => {
-    setShowScore(true);
-    fetchScore();
-  };
+  const matchTemplate = [
+    { matchType: "Doubles", matchNumber: 1 },
+    { matchType: "Doubles", matchNumber: 2 },
+    { matchType: "Doubles", matchNumber: 3 },
+    { matchType: "Singles", matchNumber: 1 },
+    { matchType: "Singles", matchNumber: 2 },
+    { matchType: "Singles", matchNumber: 3 },
+    { matchType: "Singles", matchNumber: 4 },
+    { matchType: "Singles", matchNumber: 5 },
+    { matchType: "Singles", matchNumber: 6 },
+  ];
+
+  try {
+    const res = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`);
+    const events = await res.json();
+
+    const merged = matchTemplate.map((template, idx) => {
+      const dbEvent = events[idx]; // Match by index (or enhance later by type/number)
+
+      if (dbEvent) {
+        return {
+          ...template,
+          match_id: dbEvent.match_id,
+          eventId: dbEvent.id,
+          player1: dbEvent.player1,
+          player2: dbEvent.player2,
+          sets: dbEvent.sets,
+          currentGame: dbEvent.current_game,
+          status: dbEvent.status,
+          started: dbEvent.started,
+          currentServe: dbEvent.current_serve,
+        };
+      } else {
+        return {
+          ...template,
+          match_id: null,
+          eventId: null,
+          player1: null,
+          player2: null,
+          sets: [],
+          currentGame: [],
+          status: "pending",
+          started: false,
+          currentServe: null,
+        };
+      }
+    });
+
+    setScores(merged);
+    console.log("✅ Merged template with DB events:", merged);
+  } catch (err) {
+    console.error("❌ Error merging fallback with DB events:", err);
+  }
+};
+
+  
   const handleSave = async (idx) => {
     setEditableMatches((prev) => prev.filter((i) => i !== idx));
     const updatedMatch = scores[idx];
@@ -276,25 +388,51 @@ function LiveScore() {
             <p className="match-info">
               {nextMatch.date.toLocaleString()} — {nextMatch.opponent} ({nextMatch.location})
             </p>
-            {isAdmin && !eventStarted && (
-  <button className="event-button" onClick={() => {
-    handleStartMatch();
-    setEventStarted(true);
-  }}>
+            {isAdmin && (!eventStarted || eventFinished) && (
+  <button className="event-button" onClick={handleStartMatch}>
     Start Event
   </button>
 )}
 
-            {isAdmin && eventStarted && !eventFinished && (
-              <button className="event-button" onClick={() => setEventFinished(true)}>
-                Finish Event
-              </button>
-            )}
 
-
-
+{isAdmin && eventStarted && !eventFinished && (
+  <button
+    className="event-button"
+    onClick={async () => {
+        try {
+          // 1. Mark the match as completed
+          const res = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+      
+          if (!res.ok) throw new Error("Failed to mark match as completed");
+      
+          // 2. Delete all related events
+          const deleteRes = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`, {
+            method: "DELETE",
+          });
+      
+          if (!deleteRes.ok) throw new Error("Failed to delete events");
+      
+          console.log("✅ Match marked completed & events deleted");
+      
+          // 3. Reset frontend state
+          setScores([]);
+          setTeamScore([0, 0]);       // 👈 Reset score if needed
+          setEventStarted(false);     // 👈 Allow new event to be started
+          setEventFinished(true);     // 👈 Triggers UI change
+          setShowScore(false);        // 👈 Hides score panel
+        } catch (err) {
+          console.error("❌ Error finishing event:", err);
+          alert("Failed to complete event.");
+        }
+      }}   
+  >
+    Finish Event
+  </button>
+)}
 <h2 className="page-title">Live Score</h2>
-
 {eventStarted && !eventFinished ? (
   <>
     <h3 style={{ marginBottom: 20 }}>
@@ -302,18 +440,16 @@ function LiveScore() {
     </h3>
 
     {!showScore && (
-      <button className="nav-button" onClick={handleShowScore}>
-        Show Live Score
-      </button>
-    )}
+  <button className="nav-button" onClick={handleShowScore}>
+    Show Live Score
+  </button>
+)}
   </>
 ) : eventFinished ? (
   <p style={{ color: "gray" }}>The event has finished. Live scores are no longer available.</p>
 ) : (
   <p style={{ color: "red" }}>You must start the event to view live scores.</p>
 )}
-
-
           </>
         )}
       </div>
@@ -461,26 +597,21 @@ function LiveScore() {
     updated[idx].player2 = p2;
     updated[idx].started = true;
     updated[idx].status = "live";
-    updated[idx].sets =
-      updated[idx].matchType === "Singles"
-        ? [[0, 0], [0, 0], [0, 0]]
-        : [[0, 0]];
+    updated[idx].sets = updated[idx].matchType === "Singles"
+      ? [[0, 0], [0, 0], [0, 0]]
+      : [[0, 0]];
     updated[idx].currentGame = [0, 0];
     updated[idx].currentServe = serveValue;
   
-    setScores(updated);
-    setShowAssignIndex(null);
-  
-    // Use nextMatch.id as the match ID (because this is the active match)
-    const matchId = nextMatch?.id;
+    const matchId = nextMatch?.id; // ✅ shared match_id for all events
     if (!matchId) {
-      console.error("No match ID available for creating the event.");
+      console.error("No shared match ID available");
       return;
     }
   
-    // Create a new event in the backend
     try {
       const payload = {
+        match_id: matchId, // ✅ same for all
         player1: p1,
         player2: p2,
         sets: updated[idx].sets,
@@ -490,44 +621,26 @@ function LiveScore() {
         current_serve: serveValue,
       };
   
-      console.log("Creating event with:", payload);
+      console.log(`Creating event for box ${idx}`, payload);
   
-      let response;
-
-      if (!updated[idx].eventId) {
-        console.log("Creating new event for matchId:", matchId);
-        response = await fetch(`http://127.0.0.1:8000/events/${matchId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        console.log("Response from event creation:", response);
-      }if (updated[idx].eventId) {
-        console.log("Updating existing event with eventId:", updated[idx].eventId);
-        response = await fetch(`http://127.0.0.1:8000/events/${updated[idx].eventId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        console.log("Response from event update:", response);
-      }
-      
+      const response = await fetch(`http://127.0.0.1:8000/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
   
       if (!response.ok) throw new Error("Failed to create event");
       const data = await response.json();
-      console.log("Event response:", data);
   
-        if (!updated[idx].eventId && data.id) {
-            updated[idx].eventId = data.id;
-          } // Only save if it's a new event
-      
-      setScores(updated); // update with new eventId
-      console.log("Updated scores:", updated);
-
+      updated[idx].eventId = data.id;
+      setScores(updated);
+      setShowAssignIndex(null);
+      console.log("Box event created:", data);
     } catch (error) {
       console.error("Error creating event:", error);
     }
   }}
+  
   
   onClose={() => setShowAssignIndex(null)}
   playerList={playerList}

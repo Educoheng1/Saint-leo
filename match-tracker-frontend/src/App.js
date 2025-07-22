@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState,useEffect  } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Schedule } from "./components/Schedule";
 import PlayerList from "./components/PlayerList";
@@ -9,14 +9,24 @@ import RoleSelector from "./components/RoleSelector";
 import { AdminProvider, useAdmin } from './AdminContext'; // NEW
 
 function AppContent() {
-  const [roleSelected, setRoleSelected] = useState(false);
+  const [roleSelected, setRoleSelected] = useState(() => {
+    return localStorage.getItem("roleSelected") === "true";
+  });
   const { setIsAdmin } = useAdmin();
+
+  useEffect(() => {
+    const isAdmin = localStorage.getItem("isAdmin") === "true";
+    setIsAdmin(isAdmin);
+  }, [setIsAdmin]);
 
   if (!roleSelected) {
     return (
       <RoleSelector
         onSelect={(role) => {
-          setIsAdmin(role === 'admin');
+          const isAdmin = role === "admin";
+          setIsAdmin(isAdmin);
+          localStorage.setItem("isAdmin", isAdmin);
+          localStorage.setItem("roleSelected", true);
           setRoleSelected(true);
         }}
       />
@@ -45,3 +55,4 @@ function App() {
 }
 
 export default App;
+
