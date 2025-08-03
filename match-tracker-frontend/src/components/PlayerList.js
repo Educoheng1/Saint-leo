@@ -14,7 +14,9 @@ export default function PlayerList({ onClose }) {
     doubles_season: "",
     doubles_all_time: ""
   });
-
+  const [editingId, setEditingId] = useState(null);
+  const [editedPlayer, setEditedPlayer] = useState({});
+  
   useEffect(() => {
     fetchPlayers();
   }, []);
@@ -108,15 +110,109 @@ export default function PlayerList({ onClose }) {
         <tbody>
           {players.map((p) => (
             <tr key={p.id}>
-              <td style={tdStyle}>{p.name}</td>
-              <td style={tdStyle}>{p.year}</td>
-              <td style={tdStyle}>{p.singles_season}</td>
-              <td style={tdStyle}>{p.singles_all_time}</td>
-              <td style={tdStyle}>{p.doubles_season}</td>
-              <td style={tdStyle}>{p.doubles_all_time}</td>
+              <td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.name}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, name: e.target.value })}
+    />
+  ) : (
+    p.name
+  )}
+</td>
+<td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.year}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, year: e.target.value })}
+    />
+  ) : (
+    p.year
+  )}
+</td>
+<td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.singles_season}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, singles_season: e.target.value })}
+    />
+  ) : (
+    p.singles_season
+  )}
+</td>
+<td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.singles_all_time}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, singles_all_time: e.target.value })}
+    />
+  ) : (
+    p.singles_all_time
+  )}
+</td>
+<td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.doubles_season}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, doubles_season: e.target.value })}
+    />
+  ) : (
+    p.doubles_season
+  )}
+</td>
+<td style={tdStyle}>
+  {editingId === p.id ? (
+    <input
+      value={editedPlayer.doubles_all_time}
+      onChange={(e) => setEditedPlayer({ ...editedPlayer, doubles_all_time: e.target.value })}
+    />
+  ) : (
+    p.doubles_all_time
+  )}
+</td>
+
               {isAdmin && (
                 <td style={tdStyle}>
-                  <button onClick={() => handleDelete(p.id)} className="delete-button">Delete</button>
+                 {editingId === p.id ? (
+  <>
+    <button
+      className="save-button"
+      onClick={async () => {
+        const res = await fetch(`http://127.0.0.1:8000/players/${p.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editedPlayer),
+        });
+        if (res.ok) {
+          setEditingId(null);
+          fetchPlayers();
+        } else {
+          alert("Failed to update player.");
+        }
+      }}
+    >
+      Save
+    </button>
+    <button
+      className="cancel-button"
+      onClick={() => setEditingId(null)}
+      style={{ marginLeft: 6 }}
+    >
+      Cancel
+    </button>
+  </>
+) : (
+  <button
+    className="edit-button"
+    onClick={() => {
+      setEditingId(p.id);
+      setEditedPlayer(p);
+    }}
+  >
+    Edit
+  </button>
+)}
+
                 </td>
               )}
             </tr>

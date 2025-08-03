@@ -76,4 +76,5 @@ events = Table(
     Column("status", String, nullable=False, default="pending"),  # e.g., 'live', 'completed'
     Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
     Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
+    Column("winner", String),
 )

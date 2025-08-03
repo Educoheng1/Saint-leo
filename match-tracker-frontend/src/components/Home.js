@@ -10,7 +10,7 @@ function handleLogout() {
 
 export default function Home() {
   const { isAdmin } = useAdmin();
-
+  const guestName = localStorage.getItem("guestName");
   return (
     <div className="home-container">
        {/* Logout button in the upper-right corner */}
@@ -27,10 +27,10 @@ export default function Home() {
         </div>
 
         <h1 className="home-title">Saint Leo Tennis</h1>
-
         <p style={{ color: "#666", fontSize: "16px", marginBottom: "20px" }}>
-          Welcome {isAdmin ? "Admin" : "Guest"}
-        </p>
+  Welcome {isAdmin ? "Admin" : guestName || "Guest"}
+</p>
+
 
         <nav className="home-nav">
           <Link to="/schedule">

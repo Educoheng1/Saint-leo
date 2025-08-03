@@ -441,4 +441,59 @@
   .logout-button:hover {
     background-color: #d62828;
   }
-        
+
+  .box-score-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    margin-top: 10px;
+    gap: 8px;
+    text-align: center;
+  }
+  
+  .grid-header {
+    font-weight: bold;
+    border-bottom: 2px solid #ccc;
+    padding-bottom: 4px;
+  }
+  
+  .grid-cell {
+    padding: 4px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .boxscore-container {
+    padding: 20px;
+  }
+  
+  .match-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+  
+  .match-box {
+    padding: 16px;
+    border: 2px solid #004d00;
+    border-radius: 12px;
+    background-color: #fefefe;
+  }
+  
+  .score-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+  }
+  
+  .score-table th {
+    font-weight: bold;
+  }
+  
+  .player-name {
+    text-align: left;
+    font-weight: bold;
+  }
+  
+  .match-winner {
+    margin-top: 8px;
+  }
+  

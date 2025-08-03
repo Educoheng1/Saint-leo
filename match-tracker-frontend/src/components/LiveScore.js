@@ -162,7 +162,7 @@ function LiveScore() {
       const updated = [...scores];
   
       for (let idx = 0; idx < updated.length; idx++) {
-        const match = updated[idx];
+       
   
         const payload = {
           match_id: nextMatch.id,         // Shared for all events
@@ -205,7 +205,7 @@ function LiveScore() {
       console.error("Error starting all events:", error);
     }
   };
-  
+
   
   useEffect(() => {
     const checkEventStarted = async () => {
@@ -230,6 +230,7 @@ function LiveScore() {
             currentServe: e.current_serve,
             matchType: e.sets.length === 3 ? "Singles" : "Doubles",
             matchNumber: idx + 1,
+            winner: e.winner,
           }));
           setScores(restoredScores);
           console.log("✅ Restored match from DB:", restoredScores);
@@ -323,6 +324,7 @@ const handleShowScore = async () => {
           status: dbEvent.status,
           started: dbEvent.started,
           currentServe: dbEvent.current_serve,
+          winner: dbEvent.winner,
         };
       } else {
         return {
@@ -365,6 +367,9 @@ const handleShowScore = async () => {
           status: updatedMatch.status,
           started: updatedMatch.started,
           current_serve: updatedMatch.currentServe,
+          winner: updatedMatch.winner, // ✅ correct scop
+
+
         }),
       });
       if (!response.ok) throw new Error("Failed to update event data");
@@ -374,7 +379,14 @@ const handleShowScore = async () => {
       console.error("Failed to update event:", err);
     }
   };
-
+  
+  useEffect(() => {
+    const savedScore = localStorage.getItem("teamScore");
+    if (savedScore) {
+      setTeamScore(JSON.parse(savedScore));
+    }
+  }, []);
+  
   return (
     <div style={{ padding: 20 }}>
       <BackButton />
@@ -399,39 +411,41 @@ const handleShowScore = async () => {
   <button
     className="event-button"
     onClick={async () => {
-        try {
-          // 1. Mark the match as completed
-          const res = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/complete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-      
-          if (!res.ok) throw new Error("Failed to mark match as completed");
-      
-          // 2. Delete all related events
-          const deleteRes = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`, {
-            method: "DELETE",
-          });
-      
-          if (!deleteRes.ok) throw new Error("Failed to delete events");
-      
-          console.log("✅ Match marked completed & events deleted");
-      
-          // 3. Reset frontend state
-          setScores([]);
-          setTeamScore([0, 0]);       // 👈 Reset score if needed
-          setEventStarted(false);     // 👈 Allow new event to be started
-          setEventFinished(true);     // 👈 Triggers UI change
-          setShowScore(false);        // 👈 Hides score panel
-        } catch (err) {
-          console.error("❌ Error finishing event:", err);
-          alert("Failed to complete event.");
-        }
-      }}   
+      // 🔒 1. Check if all matches are completed
+      const incomplete = scores.filter((s) => s.status !== "completed");
+      if (incomplete.length > 0) {
+        alert("You must complete all 9 matches before finishing the event.");
+        return;
+      }
+
+      try {
+        // 2. Mark the match as completed
+        const res = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (!res.ok) throw new Error("Failed to mark match as completed");
+
+        console.log("✅ Match marked completed");
+
+        // 3. Reset frontend state
+        setScores([]);
+        setTeamScore([0, 0]);
+        localStorage.removeItem(`teamScore_${nextMatch.id}`);
+        setEventStarted(false);
+        setEventFinished(true);
+        setShowScore(false);
+      } catch (err) {
+        console.error("❌ Error finishing event:", err);
+        alert("Failed to complete event.");
+      }
+    }}
   >
     Finish Event
   </button>
 )}
+
 <h2 className="page-title">Live Score</h2>
 {eventStarted && !eventFinished ? (
   <>
@@ -497,21 +511,53 @@ const handleShowScore = async () => {
       {score.status === "live" && (
         <button
           className="end-button"
-          onClick={() => {
+          onClick={async () => {
             const winner = window.prompt("Who won? (A or B)")?.toUpperCase();
-            if (winner === "A") {
-              setTeamScore(([a, b]) => [a + 1, b]);
-            } else if (winner === "B") {
-              setTeamScore(([a, b]) => [a, b + 1]);
-            } else {
+          
+            if (winner !== "A" && winner !== "B") {
               alert("Invalid input. Type A or B.");
               return;
             }
+            if (winner === "A") {
+                const newScore = [teamScore[0] + 1, teamScore[1]];
+                setTeamScore(newScore);
+                localStorage.setItem(`teamScore_${nextMatch.id}`, JSON.stringify(newScore));
 
+              } else if (winner === "B") {
+                const newScore = [teamScore[0], teamScore[1] + 1];
+                setTeamScore(newScore);
+                localStorage.setItem(`teamScore_${nextMatch.id}`, JSON.stringify(newScore));
+
+              }
             const updated = [...scores];
             updated[idx].status = "completed";
+            updated[idx].winner = winner; // ✅ mark who won
             setScores(updated);
+          
+            const match = updated[idx];
+          
+            try {
+              await fetch(`http://127.0.0.1:8000/events/${match.eventId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  match_id: match.match_id,
+                  player1: match.player1,
+                  player2: match.player2,
+                  sets: match.sets,
+                  current_game: match.currentGame,
+                  status: "completed",
+                  started: match.started,
+                  current_serve: match.currentServe,
+                  winner: winner, // 👈 only if you add this to the DB
+                }),
+              });
+              console.log(`✅ Match ${idx + 1} marked as completed`);
+            } catch (err) {
+              console.error("❌ Failed to update match:", err);
+            }
           }}
+          
         >
           End Match
         </button>
@@ -533,15 +579,27 @@ const handleShowScore = async () => {
                     <tbody>
                       {players.map((player, i) => (
                         <tr key={i}>
-                          <td style={{ fontWeight: "bold", padding: 8 }}>
-                            {player}
-                            {" "}
-                            {(() => {
-                              const totalGames = sets.reduce((sum, set) => sum + set.reduce((a, b) => a + b, 0), 0);
-                              const serverIndex = totalGames % 2 === 0 ? 0 : 1;
-                              return i === serverIndex ? "🎾" : "";
-                            })()}
-                          </td>
+   <td style={{ fontWeight: "bold", padding: 8 }}>
+  {player}
+  {" "}
+  {(() => {
+    const totalGames = sets.reduce((sum, set) => sum + set.reduce((a, b) => a + b, 0), 0);
+    const serverIndex = totalGames % 2 === 0 ? 0 : 1;
+    const matchWinner = scores[idx]?.winner;
+    const isServer = i === serverIndex;
+    const isWinner = (matchWinner === "A" && i === 0) || (matchWinner === "B" && i === 1);
+
+    return (
+      <>
+        {isServer ? "🎾" : ""}
+        {isWinner ? " ✅" : ""}
+      </>
+    );
+  })()}
+</td>
+
+
+
                           {sets.map((set, j) => (
                             <td key={j}>
                               {isEditable(idx) ? (
@@ -602,6 +660,7 @@ const handleShowScore = async () => {
       : [[0, 0]];
     updated[idx].currentGame = [0, 0];
     updated[idx].currentServe = serveValue;
+
   
     const matchId = nextMatch?.id; // ✅ shared match_id for all events
     if (!matchId) {

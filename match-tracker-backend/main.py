@@ -105,6 +105,7 @@ class Event(BaseModel):
     status: str = "pending"  # "live", "completed", or "pending"
     started: bool = False  # Whether the event has started
     current_serve: Optional[int] = None  # 0 for player1/team, 1 for opponent
+    winner: Optional[str] = None 
 
 class MatchIn(BaseModel):
     id: int
@@ -129,6 +130,11 @@ async def get_schedule():
     return results
 
 
+@app.get("/schedule/{id}")
+async def get_schedule_by_id(id: int):
+    query = matches.select().where(matches.c.id == id)
+    result = await database.fetch_one(query)
+    return result
 live_scores: List[Dict] = []  # in-memory storage
 # Routes
 @app.get("/")
@@ -180,19 +186,6 @@ async def delete_player(player_id: int):
         return {"message": "Player deleted"}
     else:
         raise HTTPException(status_code=404, detail="Player not found")
-
-
-# Delete a match by ID
-from fastapi import HTTPException
-
-@app.delete("/schedule/{match_id}")
-async def delete_match(match_id: int):
-    query = matches.delete().where(matches.c.id == match_id)
-    result = await database.execute(query)
-
-    if result:
-        return {"message": "Match deleted"}
-    raise HTTPException(status_code=404, detail="Match not found")
 
 
 @app.post("/scoreboxes")
@@ -295,12 +288,10 @@ async def start_event(match_id: int):
 
 @app.put("/events/{event_id}")
 async def update_event(event_id: int, event_data: dict):
-    # Check if the event exists
     existing_event = await database.fetch_one(events.select().where(events.c.id == event_id))
     if not existing_event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    # Update the event
     query = events.update().where(events.c.id == event_id).values(
         player1=event_data.get("player1"),
         player2=event_data.get("player2"),
@@ -309,12 +300,13 @@ async def update_event(event_id: int, event_data: dict):
         status=event_data.get("status"),
         started=event_data.get("started"),
         current_serve=event_data.get("current_serve"),
+        winner=event_data.get("winner"),  # ✅ Add this
     )
     await database.execute(query)
 
-    # Fetch the updated event
     updated_event = await database.fetch_one(events.select().where(events.c.id == event_id))
     return {"message": "Event updated", "event": updated_event}
+
 
 @app.get("/events/match/{match_id}")
 async def get_events_for_match(match_id: int):
@@ -337,3 +329,21 @@ async def delete_events_by_match_id(match_id: int):
     query = events.delete().where(events.c.match_id == match_id)
     await database.execute(query)
     return {"message": f"Events for match {match_id} deleted"}
+
+@app.delete("/schedule/{match_id}")
+async def delete_match_and_events(match_id: int):
+    # Delete all events related to this match
+    delete_events_query = events.delete().where(events.c.match_id == match_id)
+    await database.execute(delete_events_query)
+
+    # Then delete the match itself
+    delete_match_query = matches.delete().where(matches.c.id == match_id)
+    await database.execute(delete_match_query)
+
+    return {"message": f"Match {match_id} and its events deleted successfully"}
+
+@app.put("/players/{player_id}")
+async def update_player(player_id: int, payload: dict):
+    query = players.update().where(players.c.id == player_id).values(**payload)
+    await database.execute(query)
+    return {"message": "Player updated"}

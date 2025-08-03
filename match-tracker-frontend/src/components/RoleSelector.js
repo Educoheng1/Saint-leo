@@ -33,9 +33,21 @@ export default function RoleSelector({ onSelect }) {
           <button onClick={handleAdminClick} className="nav-button">
             Admin
           </button>
-          <button onClick={() => onSelect("guest")} className="nav-button">
-            Guest
-          </button>
+          <button
+  onClick={() => {
+    const name = window.prompt("Enter your name:");
+    if (name && name.trim()) {
+      localStorage.setItem("guestName", name.trim());
+      onSelect("guest");
+    } else {
+      alert("Please enter a valid name to continue as a guest.");
+    }
+  }}
+  className="nav-button"
+>
+  Guest
+</button>
+
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "300px", width: "100%" }}>

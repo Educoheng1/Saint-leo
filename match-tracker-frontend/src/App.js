@@ -7,6 +7,8 @@ import Home from './components/Home';
 import Admin from "./Admin";
 import RoleSelector from "./components/RoleSelector";
 import { AdminProvider, useAdmin } from './AdminContext'; // NEW
+import BoxScorePage from "./components/BoxScorePage";
+
 
 function AppContent() {
   const [roleSelected, setRoleSelected] = useState(() => {
@@ -40,6 +42,8 @@ function AppContent() {
       <Route path="/players" element={<PlayerList />} />
       <Route path="/livescore" element={<LiveScore />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/boxscore/:id" element={<BoxScorePage />} />
+
     </Routes>
   );
 }
