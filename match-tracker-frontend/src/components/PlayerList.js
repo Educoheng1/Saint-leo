@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useAdmin } from "../AdminContext";
 import BackButton from "./BackButton";
+import API_BASE_URL from "../config"; // adjust path if needed
+
 
 export default function PlayerList({ onClose }) {
   const { isAdmin } = useAdmin(); // 👈 Get admin status
@@ -22,7 +24,7 @@ export default function PlayerList({ onClose }) {
   }, []);
 
   const fetchPlayers = () => {
-    fetch("http://127.0.0.1:8000/players")
+    fetch(`${API_BASE_URL}/players`)
       .then((res) => res.json())
       .then(setPlayers)
       .catch((err) => console.error("Failed to fetch players:", err));
@@ -34,7 +36,7 @@ export default function PlayerList({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const res = await fetch("http://127.0.0.1:8000/players", {
+    const res = await fetch(`${API_BASE_URL}/players`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newPlayer)
@@ -57,7 +59,7 @@ export default function PlayerList({ onClose }) {
   };
 
   async function startEvent(matchId, player1, player2) {
-    const response = await fetch("http://127.0.0.1:8000/events", {
+    const response = await fetch(`${API_BASE_URL}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -79,7 +81,7 @@ export default function PlayerList({ onClose }) {
     const confirm = window.confirm("Are you sure you want to delete this player?");
     if (!confirm) return;
 
-    const res = await fetch(`http://127.0.0.1:8000/players/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/players/${id}`, {
       method: "DELETE"
     });
 
@@ -178,7 +180,7 @@ export default function PlayerList({ onClose }) {
     <button
       className="save-button"
       onClick={async () => {
-        const res = await fetch(`http://127.0.0.1:8000/players/${p.id}`, {
+        const res = await fetch(`${API_BASE_URL}/players/${p.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(editedPlayer),

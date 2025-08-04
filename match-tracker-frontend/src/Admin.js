@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { ScoreInput } from "./components/LiveScore";
 import { useAdmin } from "./AdminContext"; // 👈 import isAdmin
+import API_BASE_URL from "./config"; // adjust path if needed
+
 
 export default function Admin() {
   const { isAdmin } = useAdmin();
@@ -8,13 +10,13 @@ export default function Admin() {
   const [newPlayer, setNewPlayer] = useState({ name: "", country: "" });
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/matches")
+    fetch(`${API_BASE_URL}/matches`)
       .then((res) => res.json())
       .then(setMatches);
   }, []);
 
   const updateScore = (matchId, newScore) => {
-    fetch(`http://127.0.0.1:8000/matches/${matchId}/score`, {
+    fetch(`${API_BASE_URL}/matches/${matchId}/score`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newScore),
@@ -22,7 +24,7 @@ export default function Admin() {
   };
 
   const handleAddPlayer = () => {
-    fetch("http://127.0.0.1:8000/players", {
+    fetch(`${API_BASE_URL}/players`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newPlayer),

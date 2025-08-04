@@ -4,6 +4,7 @@ import "../styles.css";
 import BoxScore from "./BoxScore";
 import { useAdmin } from "../AdminContext";
 import BackButton from "./BackButton";
+import API_BASE_URL from "../config"; // adjust path if needed
 
 function formatTimeDiff(diff) {
   const totalSeconds = Math.max(0, Math.floor(diff / 1000));
@@ -64,7 +65,7 @@ export function Schedule({ onSelect = () => {}, showSchedule = true, onCloseSche
   const [countdown, setCountdown] = useState("");
 
   const fetchMatches = () => {
-    fetch("http://127.0.0.1:8000/schedule")
+    fetch(`${API_BASE_URL}/schedule`)
       .then((res) => res.json())
       .then(setMatches)
       .catch((err) => console.error("Failed to fetch matches:", err));
@@ -105,7 +106,7 @@ export function Schedule({ onSelect = () => {}, showSchedule = true, onCloseSche
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch("http://localhost:8000/schedule", {
+      const response = await fetch(`${API_BASE_URL}/schedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -131,7 +132,7 @@ export function Schedule({ onSelect = () => {}, showSchedule = true, onCloseSche
     const confirmDelete = window.confirm("Are you sure you want to delete this match?");
     if (!confirmDelete) return;
 
-    const res = await fetch(`http://127.0.0.1:8000/schedule/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE_URL}/schedule/${id}`, { method: "DELETE" });
     if (res.ok) fetchMatches();
     else alert("Failed to delete match");
   };

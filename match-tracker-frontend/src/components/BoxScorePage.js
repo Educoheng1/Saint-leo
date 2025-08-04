@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import BackButton from "../components/BackButton";
 import "../styles.css";
+import API_BASE_URL from "../config"; // adjust path if needed
 
 export default function BoxScorePage() {
   const { id } = useParams();
@@ -10,7 +11,7 @@ export default function BoxScorePage() {
 
 
   useEffect(() => {
-    fetch(`http://localhost:8000/events/match/${id}`)
+    fetch(`${API_BASE_URL}/players/events/match/${id}`)
       .then((res) => res.json())
       .then(setMatches)
       .catch((err) => console.error("Error loading box scores:", err));
@@ -30,8 +31,8 @@ export default function BoxScorePage() {
     async function loadMatchAndEvents() {
       try {
         const [eventsRes, matchRes] = await Promise.all([
-          fetch(`http://localhost:8000/events/match/${id}`),
-          fetch(`http://localhost:8000/schedule/${id}`)
+          fetch(`${API_BASE_URL}/events/match/${id}`),
+          fetch(`${API_BASE_URL}/schedule/${id}`)
 
         ]);
   

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import "../styles.css";
 import { useAdmin } from "../AdminContext"; 
 import BackButton from "./BackButton";
+import API_BASE_URL from "../config"; // adjust path if needed
 
 export function ScoreInput({ value, onChange, onEnter }) {
   const [focused, setFocused] = useState(false);
@@ -129,14 +130,14 @@ function LiveScore() {
   const isEditable = (idx) => editableMatches.includes(idx);
 
   useEffect(() => {
-    fetch("http://localhost:8000/players")
+    fetch(`${API_BASE_URL}/players`)
       .then((res) => res.json())
       .then(setPlayerList)
       .catch((err) => console.error("Failed to fetch players", err));
   }, []);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/schedule")
+    fetch( `${API_BASE_URL}/schedule`)
       .then((res) => res.json())
       .then((data) => {
         const upcoming = data
@@ -150,7 +151,7 @@ function LiveScore() {
   
   const handleStartMatch = async () => {
     try {
-      const matchResponse = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/start`, {
+      const matchResponse = await fetch(`${API_BASE_URL}/schedule/${nextMatch.id}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -175,7 +176,7 @@ function LiveScore() {
           current_serve: null,
         };
   
-        const eventRes = await fetch(`http://127.0.0.1:8000/events`, {
+        const eventRes = await fetch(`${API_BASE_URL}/events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -212,7 +213,7 @@ function LiveScore() {
       if (!nextMatch?.id) return;
   
       try {
-        const res = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`);
+        const res = await fetch(`${API_BASE_URL}/events/match/${nextMatch.id}`);
         const events = await res.json();
   
         if (events.length > 0) {
@@ -249,7 +250,7 @@ function LiveScore() {
 
   const fetchScore = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/schedule");
+      const res = await fetch(`${API_BASE_URL}/schedule`);
       const schedule = await res.json();
   
       const matchTemplate = [
@@ -306,7 +307,7 @@ const handleShowScore = async () => {
   ];
 
   try {
-    const res = await fetch(`http://127.0.0.1:8000/events/match/${nextMatch.id}`);
+    const res = await fetch(`${API_BASE_URL}/events/match/${nextMatch.id}`);
     const events = await res.json();
 
     const merged = matchTemplate.map((template, idx) => {
@@ -355,7 +356,7 @@ const handleShowScore = async () => {
     const updatedMatch = scores[idx];
   
     try {
-      const response = await fetch(`http://127.0.0.1:8000/events/${updatedMatch.eventId}`, {
+      const response = await fetch(`${API_BASE_URL}/events/${updatedMatch.eventId}`, {
         method: "PUT", // Use PUT for updates
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -420,7 +421,7 @@ const handleShowScore = async () => {
 
       try {
         // 2. Mark the match as completed
-        const res = await fetch(`http://127.0.0.1:8000/schedule/${nextMatch.id}/complete`, {
+        const res = await fetch(`${API_BASE_URL}/schedule/${nextMatch.id}/complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
@@ -537,7 +538,7 @@ const handleShowScore = async () => {
             const match = updated[idx];
           
             try {
-              await fetch(`http://127.0.0.1:8000/events/${match.eventId}`, {
+              await fetch(`${API_BASE_URL}/events/${match.eventId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -682,7 +683,7 @@ const handleShowScore = async () => {
   
       console.log(`Creating event for box ${idx}`, payload);
   
-      const response = await fetch(`http://127.0.0.1:8000/events`, {
+      const response = await fetch(`${API_BASE_URL}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
