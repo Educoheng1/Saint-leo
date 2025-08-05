@@ -350,3 +350,13 @@ async def update_player(player_id: int, payload: dict):
     query = players.update().where(players.c.id == player_id).values(**payload)
     await database.execute(query)
     return {"message": "Player updated"}
+@app.post("/schedule/{match_id}/complete")
+async def complete_match(match_id: int):
+    query = matches.update().where(matches.c.id == match_id).values(
+        status="completed"
+    )
+    result = await database.execute(query)
+    if result:
+        updated_match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
+        return {"message": "Match marked as completed", "match": updated_match}
+    raise HTTPException(status_code=404, detail="Match not found")

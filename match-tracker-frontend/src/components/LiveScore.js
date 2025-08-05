@@ -437,6 +437,12 @@ const handleShowScore = async () => {
         setEventStarted(false);
         setEventFinished(true);
         setShowScore(false);
+
+        // Update the match status locally
+        setNextMatch((prev) => ({
+          ...prev,
+          status: "completed",
+        }));
       } catch (err) {
         console.error("❌ Error finishing event:", err);
         alert("Failed to complete event.");
@@ -472,7 +478,9 @@ const handleShowScore = async () => {
       {showScore && (
   <>
     <div className="match-list">
-      {scores.map((score, idx) => {
+      {scores
+  .filter((score) => score.status === "live") // Only show live matches
+  .map((score, idx) => {
         if (!score.started) {
           // ✅ Admins see the match box and the assign button
           return isAdmin ? (
@@ -584,12 +592,13 @@ const handleShowScore = async () => {
   {player}
   {" "}
   {(() => {
-    const totalGames = sets.reduce((sum, set) => sum + set.reduce((a, b) => a + b, 0), 0);
-    const serverIndex = totalGames % 2 === 0 ? 0 : 1;
-    const matchWinner = scores[idx]?.winner;
-    const isServer = i === serverIndex;
-    const isWinner = (matchWinner === "A" && i === 0) || (matchWinner === "B" && i === 1);
-
+  const initialServer = score.currentServe ?? 0; // 0 for A, 1 for B
+  const totalGames = sets.reduce((sum, set) => sum + set.reduce((a, b) => a + b, 0), 0);
+  const serverIndex = (initialServer + totalGames) % 2; // alternate each game
+  const matchWinner = scores[idx]?.winner;
+  const isServer = i === serverIndex;
+  const isWinner = (matchWinner === "A" && i === 0) || (matchWinner === "B" && i === 1);
+  
     return (
       <>
         {isServer ? "🎾" : ""}
