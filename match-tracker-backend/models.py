@@ -1,18 +1,20 @@
 from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, JSON,ForeignKey
 from sqlalchemy import create_engine
 from databases import Database
- 
+
+
 DATABASE_URL = "sqlite:///./matches.db"
 
 database = Database(DATABASE_URL)
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
 
-# Define tables
+
 matches = Table(
     "matches",
     metadata,
     Column("id", Integer, primary_key=True),
+    Column("gender", String, nullable=False),
     Column("date", DateTime, nullable=False),
     Column("opponent", String, nullable=False),
     Column("location", String, nullable=True),
@@ -20,27 +22,19 @@ matches = Table(
     Column("team_score", JSON, nullable=True),
     Column("box_score", JSON, nullable=True),
     Column("match_number", Integer, nullable=False),  # Add match_number column
+    Column("winner", String, nullable=True),  # Add winner column
 )
 
 players = Table(
     "players",
-    metadata,
+    metadata,  # <-- same metadata used for your other tables
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", String),
-    Column("year", String),  # e.g., Freshman, Sophomore, Junior, Senior
-    Column("singles_season", String),       # e.g., "6-3"
-    Column("singles_all_time", String),     # e.g., "22-12"
-    Column("doubles_season", String),       # e.g., "5-4"
-    Column("doubles_all_time", String),     # e.g., "18-15"
+    Column("name", String, nullable=False),     # make this required
+    Column("gender", String, nullable=False),   # required (matches your insert)
+    Column("year", String, nullable=True),      # FR/SO/JR/SR or 1–4
 )
 
-match_lineups = Table(
-    "match_lineups",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("match_id", Integer),
-    Column("player_id", Integer),
-)
+
 scoreboxes = Table(
     "scoreboxes",
     metadata,
@@ -64,8 +58,8 @@ sets = Table(
     Column("team_score", Integer),
     Column("opponent_score", Integer),
 )
-events = Table(
-    "events",
+scores = Table(
+    "scores",
     metadata,
     Column("id", Integer, primary_key=True),
     Column("match_id", Integer, ForeignKey("matches.id"), nullable=False),  # FK to matches table
@@ -77,4 +71,6 @@ events = Table(
     Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
     Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
     Column("winner", String),
+    Column("line_no", Integer, nullable=False, default=1),
+    Column("match_type", String, nullable=True),
 )

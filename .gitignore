@@ -1,16 +1,27 @@
 # Python
-venv/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
+.venv/
 .env
 
-# Node / React
-node_modules/
-build/
-dist/
-
-# MacOS
+# OS
 .DS_Store
 
+# SQLite / local data
+*.db
+*.sqlite3
+*.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
+*.csv
+
+# Node (if present)
+node_modules/
+
+# SQLite
+*.db
+*.sqlite*
+*.db-wal
+*.db-shm
+*.csv
