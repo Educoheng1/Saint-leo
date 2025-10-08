@@ -24,11 +24,21 @@ export default function PlayerList({ onClose }) {
   }, []);
 
   const fetchPlayers = () => {
+    const yearOrder = { Senior: 4, Junior: 3, Sophomore: 2, Freshman: 1 };
+  
     fetch(`${API_BASE_URL}/players`)
       .then((res) => res.json())
-      .then(setPlayers)
+      .then((data) => {
+        const sorted = [...data].sort((a, b) => {
+          const aRank = yearOrder[a.year?.trim()] || 0;
+          const bRank = yearOrder[b.year?.trim()] || 0;
+          return bRank - aRank; // Senior first
+        });
+        setPlayers(sorted);
+      })
       .catch((err) => console.error("Failed to fetch players:", err));
   };
+  
 
   const handleChange = (e) => {
     setNewPlayer({ ...newPlayer, [e.target.name]: e.target.value });
@@ -91,6 +101,7 @@ export default function PlayerList({ onClose }) {
       alert("Failed to delete player.");
     }
   };
+
 
   return (
     <div className="card" style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>

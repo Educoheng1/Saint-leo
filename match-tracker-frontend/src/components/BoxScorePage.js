@@ -11,7 +11,7 @@ export default function BoxScorePage() {
 
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/players/events/match/${id}`)
+    fetch(`${API_BASE_URL}/events/match/${id}`)
       .then((res) => res.json())
       .then(setMatches)
       .catch((err) => console.error("Error loading box scores:", err));

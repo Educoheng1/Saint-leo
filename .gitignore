@@ -18,3 +18,10 @@ __pycache__/
 
 # Node (if present)
 node_modules/
+
+# SQLite
+*.db
+*.sqlite*
+*.db-wal
+*.db-shm
+*.csv
