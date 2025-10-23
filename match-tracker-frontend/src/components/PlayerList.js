@@ -1,275 +1,344 @@
-import React, { useEffect, useState } from "react";
+// src/pages/PlayerList.js
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import "../styles.css";
 import { useAdmin } from "../AdminContext";
-import BackButton from "./BackButton";
-import API_BASE_URL from "../config"; // adjust path if needed
+import API_BASE_URL from "../config";
 
+// ------------ Top Nav (same look as Schedule/Dashboard)
+function TopNav({ name, hasLive }) {
+  return (
+    <header className="sl-topnav">
+      <div className="sl-brand">
+        <img src="/saint-leo-logo.png" alt="Saint Leo" />
+        <div className="sl-brand-text">
+          <span className="sl-brand-title">Saint Leo</span>
+          <span className="sl-brand-sub">Tennis</span>
+        </div>
+      </div>
 
-export default function PlayerList({ onClose }) {
-  const { isAdmin } = useAdmin(); // 👈 Get admin status
-  const [players, setPlayers] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [newPlayer, setNewPlayer] = useState({
-    name: "",
-    year: "",
-    singles_season: "",
-    singles_all_time: "",
-    doubles_season: "",
-    doubles_all_time: ""
-  });
-  const [editingId, setEditingId] = useState(null);
-  const [editedPlayer, setEditedPlayer] = useState({});
-  
-  useEffect(() => {
-    fetchPlayers();
-  }, []);
+      <nav className="sl-navlinks">
+        <Link to="/dashboard" className="sl-navlink">Dashboard</Link>
+        <Link to="/players" className="sl-navlink sl-navlink-accent">Roster</Link>
+        <Link to="/schedule" className="sl-navlink">Schedule</Link>
+        {hasLive && <Link to="/livescore" className="sl-navlink">Live Scores</Link>}
+        <Link to="/admin" className="sl-navlink">Admin Panel</Link>
+      </nav>
 
-  const fetchPlayers = () => {
-    const yearOrder = { Senior: 4, Junior: 3, Sophomore: 2, Freshman: 1 };
-  
-    fetch(`${API_BASE_URL}/players`)
-      .then((res) => res.json())
-      .then((data) => {
-        const sorted = [...data].sort((a, b) => {
-          const aRank = yearOrder[a.year?.trim()] || 0;
-          const bRank = yearOrder[b.year?.trim()] || 0;
-          return bRank - aRank; // Senior first
-        });
-        setPlayers(sorted);
-      })
-      .catch((err) => console.error("Failed to fetch players:", err));
-  };
-  
+      <div className="sl-userbox">
+        <span className="sl-username">{name}</span>
+        <button
+          className="sl-logout"
+          onClick={() => { localStorage.clear(); }}
+        >
+          Logout
+        </button>
+      </div>
+    </header>
+  );
+}
 
-  const handleChange = (e) => {
-    setNewPlayer({ ...newPlayer, [e.target.name]: e.target.value });
-  };
+// ------------ helpers
+const normGender = (g) => {
+  const s = String(g || "").toLowerCase();
+  if (["m","male","men","man"].includes(s)) return "men";
+  if (["f","female","women","woman"].includes(s)) return "women";
+  return "unknown";
+};
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`${API_BASE_URL}/players`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newPlayer)
-    });
+async function fetchJSON(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
 
-    if (res.ok) {
-      fetchPlayers();
-      setShowForm(false);
-      setNewPlayer({
-        name: "",
-        year: "",
-        singles_season: "",
-        singles_all_time: "",
-        doubles_season: "",
-        doubles_all_time: ""
-      });
-    } else {
-      alert("Failed to add player.");
-    }
-  };
-
-  async function startEvent(matchId, player1, player2) {
-    const response = await fetch(`${API_BASE_URL}/events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        match_id: matchId,
-        player1: player1,
-        player2: player2,
-        sets: [[0, 0]],
-        current_game: [0, 0],
-        status: "live",
-        started: true,
-        current_serve: 0,
-      }),
-    });
-    const data = await response.json();
-    console.log("Event created:", data);
+// robust live check for the top bar
+async function hasLiveMatch() {
+  for (const u of [
+    `${API_BASE_URL}/schedule?status=live`,
+    `${API_BASE_URL}/schedule`,
+  ]) {
+    const d = await fetchJSON(u);
+    if (!d) continue;
+    const arr = Array.isArray(d) ? d : [d];
+    if (arr.some(m => String(m?.status || "").toLowerCase() === "live")) return true;
   }
+  return false;
+}
 
-  const handleDelete = async (id) => {
-    const confirm = window.confirm("Are you sure you want to delete this player?");
-    if (!confirm) return;
+async function getRosterByGender(gender) {
+  const urls = [
+    `${API_BASE_URL}/players?gender=${gender}`,
+    `${API_BASE_URL}/roster?gender=${gender}`,
+    `${API_BASE_URL}/players`,
+    `${API_BASE_URL}/roster`,
+  ];
+  for (const u of urls) {
+    const d = await fetchJSON(u);
+    if (!d) continue;
+    const arr = Array.isArray(d) ? d : d.items || d.results || [d];
+    const mapped = arr.map((p) => ({
+      id: p.id ?? `${p.first_name || ""}-${p.last_name || ""}-${p.email || ""}`,
+      name: p.name || p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unnamed",
+      year: p.year?.trim?.() || p.class || "",
+      gender: normGender(p.gender),
+      singles_season: p.singles_season || "",
+      singles_all_time: p.singles_all_time || "",
+      doubles_season: p.doubles_season || "",
+      doubles_all_time: p.doubles_all_time || "",
+      hand: p.hand || "",
+    }));
+    // if endpoint not filtered, filter here
+    const filtered = mapped.filter((p) => p.gender === gender);
+    if (u.includes("?gender=")) return filtered;
+    if (filtered.length || mapped.length) return filtered.length ? filtered : mapped;
+  }
+  return [];
+}
 
-    const res = await fetch(`${API_BASE_URL}/players/${id}`, {
-      method: "DELETE"
+const YEAR_ORDER = { Senior: 4, Junior: 3, Sophomore: 2, Freshman: 1 };
+
+// ------------ Small UI bits
+function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ ...p });
+
+  useEffect(() => setForm({ ...p }), [p.id]); // refresh when switching
+
+  const save = async () => {
+    const res = await fetch(`${API_BASE_URL}/players/${p.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
     });
-
     if (res.ok) {
-      fetchPlayers();
+      setEditing(false);
+      onEdit?.();
     } else {
-      alert("Failed to delete player.");
+      alert("Failed to update player.");
     }
   };
-
 
   return (
-    <div className="card" style={{ maxWidth: 900, margin: "0 auto", padding: 20 }}>
-       <BackButton />
-      <h2 className="home-title" style={{ textAlign: "center" }}>Player Roster</h2>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ backgroundColor: "#f2f2f2" }}>
-            <th style={thStyle}>Name</th>
-            <th style={thStyle}>Year</th>
-            <th style={thStyle}>Singles (Season)</th>
-            <th style={thStyle}>Singles (All-Time)</th>
-            <th style={thStyle}>Doubles (Season)</th>
-            <th style={thStyle}>Doubles (All-Time)</th>
-            {isAdmin && <th style={thStyle}>Actions</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((p) => (
-            <tr key={p.id}>
-              <td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.name}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, name: e.target.value })}
-    />
-  ) : (
-    p.name
-  )}
-</td>
-<td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.year}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, year: e.target.value })}
-    />
-  ) : (
-    p.year
-  )}
-</td>
-<td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.singles_season}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, singles_season: e.target.value })}
-    />
-  ) : (
-    p.singles_season
-  )}
-</td>
-<td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.singles_all_time}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, singles_all_time: e.target.value })}
-    />
-  ) : (
-    p.singles_all_time
-  )}
-</td>
-<td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.doubles_season}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, doubles_season: e.target.value })}
-    />
-  ) : (
-    p.doubles_season
-  )}
-</td>
-<td style={tdStyle}>
-  {editingId === p.id ? (
-    <input
-      value={editedPlayer.doubles_all_time}
-      onChange={(e) => setEditedPlayer({ ...editedPlayer, doubles_all_time: e.target.value })}
-    />
-  ) : (
-    p.doubles_all_time
-  )}
-</td>
-
-              {isAdmin && (
-                <td style={tdStyle}>
-                 {editingId === p.id ? (
-  <>
-    <button
-      className="save-button"
-      onClick={async () => {
-        const res = await fetch(`${API_BASE_URL}/players/${p.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editedPlayer),
-        });
-        if (res.ok) {
-          setEditingId(null);
-          fetchPlayers();
-        } else {
-          alert("Failed to update player.");
-        }
-      }}
-    >
-      Save
-    </button>
-    <button
-      className="cancel-button"
-      onClick={() => setEditingId(null)}
-      style={{ marginLeft: 6 }}
-    >
-      Cancel
-    </button>
-  </>
-) : (
-  <button
-    className="edit-button"
-    onClick={() => {
-      setEditingId(p.id);
-      setEditedPlayer(p);
-    }}
-  >
-    Edit
-  </button>
-)}
-
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {isAdmin && (
+    <div className="sl-card" style={{ padding: 12 }}>
+      {!editing ? (
         <>
-          {!showForm ? (
-            <button className="nav-button" style={{ marginTop: 20 }} onClick={() => setShowForm(true)}>
-              Add Player
-            </button>
-          ) : (
-            <form onSubmit={handleSubmit} style={{ marginTop: 20, textAlign: "left" }}>
-              <input name="name" placeholder="Name" value={newPlayer.name} onChange={handleChange} required />
-              <input name="year" placeholder="Year" value={newPlayer.year} onChange={handleChange} required />
-              <input name="singles_season" placeholder="Singles (Season)" value={newPlayer.singles_season} onChange={handleChange} required />
-              <input name="singles_all_time" placeholder="Singles (All-Time)" value={newPlayer.singles_all_time} onChange={handleChange} required />
-              <input name="doubles_season" placeholder="Doubles (Season)" value={newPlayer.doubles_season} onChange={handleChange} required />
-              <input name="doubles_all_time" placeholder="Doubles (All-Time)" value={newPlayer.doubles_all_time} onChange={handleChange} required />
-              <div style={{ marginTop: 10 }}>
-                <button type="submit" className="nav-button">Submit</button>
-                <button type="button" onClick={() => setShowForm(false)} className="nav-button" style={{ marginLeft: 10 }}>
-                  Cancel
-                </button>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontWeight:700, color:"#123" }}>{p.name}</div>
+            {isAdmin && (
+              <div style={{ display:"flex", gap:8 }}>
+                <button className="sl-navlink" onClick={() => setEditing(true)}>Edit</button>
+                <button className="sl-logout" onClick={() => onDelete?.(p.id)} style={{ borderColor:"#f3c1c1" }}>Delete</button>
               </div>
-            </form>
-          )}
+            )}
+          </div>
+          <div style={{ color:"#5c6b62", fontSize:13, marginTop:4 }}>
+            {p.year ? `Year: ${p.year}` : "Year: —"} {p.hand ? `• ${p.hand}` : ""}
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:10, fontSize:13 }}>
+            <div className="sl-card" style={{ padding:8 }}>
+              <div style={{ fontWeight:700, color:"#174d2a" }}>Singles</div>
+              <div>Season: {p.singles_season || "—"}</div>
+              <div>All-Time: {p.singles_all_time || "—"}</div>
+            </div>
+            <div className="sl-card" style={{ padding:8 }}>
+              <div style={{ fontWeight:700, color:"#174d2a" }}>Doubles</div>
+              <div>Season: {p.doubles_season || "—"}</div>
+              <div>All-Time: {p.doubles_all_time || "—"}</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontWeight:700, color:"#174d2a", marginBottom:8 }}>Edit Player</div>
+          <div style={{ display:"grid", gap:8 }}>
+            <input value={form.name} onChange={(e)=>setForm(f=>({...f,name:e.target.value}))} placeholder="Name" />
+            <input value={form.year} onChange={(e)=>setForm(f=>({...f,year:e.target.value}))} placeholder="Year (Freshman…Senior)" />
+            <select value={form.gender || ""} onChange={(e)=>setForm(f=>({...f,gender:e.target.value}))}>
+              <option value="">Gender</option>
+              <option value="men">Men</option>
+              <option value="women">Women</option>
+            </select>
+            <input value={form.singles_season} onChange={(e)=>setForm(f=>({...f,singles_season:e.target.value}))} placeholder="Singles (Season)" />
+            <input value={form.singles_all_time} onChange={(e)=>setForm(f=>({...f,singles_all_time:e.target.value}))} placeholder="Singles (All-Time)" />
+            <input value={form.doubles_season} onChange={(e)=>setForm(f=>({...f,doubles_season:e.target.value}))} placeholder="Doubles (Season)" />
+            <input value={form.doubles_all_time} onChange={(e)=>setForm(f=>({...f,doubles_all_time:e.target.value}))} placeholder="Doubles (All-Time)" />
+            <div style={{ display:"flex", gap:8, marginTop:4 }}>
+              <button className="sl-view-btn" onClick={save}>Save</button>
+              <button className="sl-logout" onClick={()=>setEditing(false)}>Cancel</button>
+            </div>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-const thStyle = {
-  border: "1px solid #ccc",
-  padding: "10px",
-  fontWeight: "bold",
-  textAlign: "center"
-};
+export default function PlayerList() {
+  const { isAdmin } = useAdmin();
+  const guestName = localStorage.getItem("guestName") || (isAdmin ? "Admin" : "Guest");
 
-const tdStyle = {
-  border: "1px solid #ccc",
-  padding: "10px",
-  textAlign: "center"
-};
+  const [tab, setTab] = useState("men"); // 'men' | 'women'
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [live, setLive] = useState(false);
+
+  const [showForm, setShowForm] = useState(false);
+  const [newPlayer, setNewPlayer] = useState({
+    name: "",
+    year: "",
+    gender: "men",
+    singles_season: "",
+    singles_all_time: "",
+    doubles_season: "",
+    doubles_all_time: "",
+    hand: ""
+  });
+
+  // fetch roster + live flag on tab change
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const [r, liveFlag] = await Promise.all([
+        getRosterByGender(tab),
+        hasLiveMatch(),
+      ]);
+      if (!mounted) return;
+      setPlayers(r || []);
+      setLive(liveFlag);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [tab]);
+
+  const sorted = useMemo(() => {
+    const copy = [...players];
+    copy.sort((a,b) => (YEAR_ORDER[b.year?.trim?.()]||0) - (YEAR_ORDER[a.year?.trim?.()]||0));
+    return copy;
+  }, [players]);
+
+  const onDelete = async (id) => {
+    if (!window.confirm("Delete this player?")) return;
+    const res = await fetch(`${API_BASE_URL}/players/${id}`, { method: "DELETE" });
+    if (res.ok) setPlayers((prev) => prev.filter(p => p.id !== id));
+    else alert("Failed to delete player.");
+  };
+
+  const onEditDone = async () => {
+    const r = await getRosterByGender(tab);
+    setPlayers(r || []);
+  };
+
+  const submitNew = async (e) => {
+    e.preventDefault();
+    const payload = { ...newPlayer, gender: tab }; // ensure player lands in current tab
+    const res = await fetch(`${API_BASE_URL}/players`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      setShowForm(false);
+      setNewPlayer({
+        name: "",
+        year: "",
+        gender: tab,
+        singles_season: "",
+        singles_all_time: "",
+        doubles_season: "",
+        doubles_all_time: "",
+        hand: ""
+      });
+      const r = await getRosterByGender(tab);
+      setPlayers(r || []);
+    } else {
+      alert("Failed to add player.");
+    }
+  };
+
+  return (
+    <>
+      <TopNav name={guestName} hasLive={live} />
+
+      <div className="sl-main" style={{ maxWidth: 1100, margin: "16px auto", padding: "0 16px" }}>
+        <h1 className="sl-welcome">Roster</h1>
+        <p className="sl-subtitle">Browse players by team, quick edit stats</p>
+
+        {/* Men / Women tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button
+            className={`sl-logout ${tab === "men" ? "sl-view-btn" : ""}`}
+            onClick={() => setTab("men")}
+            style={{ minWidth: 92 }}
+          >
+            Men
+          </button>
+          <button
+            className={`sl-logout ${tab === "women" ? "sl-view-btn" : ""}`}
+            onClick={() => setTab("women")}
+            style={{ minWidth: 92 }}
+          >
+            Women
+          </button>
+          {isAdmin && (
+            <button
+              className="sl-navlink"
+              onClick={() => setShowForm(s => !s)}
+              style={{ marginLeft: "auto" }}
+            >
+              {showForm ? "Cancel" : "Add Player"}
+            </button>
+          )}
+        </div>
+
+        {/* Add Player (admin) */}
+        {isAdmin && showForm && (
+          <form onSubmit={submitNew} className="sl-card" style={{ padding: 14, marginBottom: 12 }}>
+            <div style={{ display:"grid", gap:8, gridTemplateColumns:"1fr 1fr", alignItems:"center" }}>
+              <input name="name" placeholder="Name" value={newPlayer.name} onChange={(e)=>setNewPlayer(f=>({...f,name:e.target.value}))} required />
+              <input name="year" placeholder="Year (Freshman…Senior)" value={newPlayer.year} onChange={(e)=>setNewPlayer(f=>({...f,year:e.target.value}))} />
+              <select name="gender" value={newPlayer.gender} onChange={(e)=>setNewPlayer(f=>({...f,gender:e.target.value}))}>
+                <option value="men">Men</option>
+                <option value="women">Women</option>
+              </select>
+              <input name="hand" placeholder="Hand (R/L)" value={newPlayer.hand} onChange={(e)=>setNewPlayer(f=>({...f,hand:e.target.value}))} />
+              <input name="singles_season" placeholder="Singles (Season)" value={newPlayer.singles_season} onChange={(e)=>setNewPlayer(f=>({...f,singles_season:e.target.value}))} />
+              <input name="singles_all_time" placeholder="Singles (All-Time)" value={newPlayer.singles_all_time} onChange={(e)=>setNewPlayer(f=>({...f,singles_all_time:e.target.value}))} />
+              <input name="doubles_season" placeholder="Doubles (Season)" value={newPlayer.doubles_season} onChange={(e)=>setNewPlayer(f=>({...f,doubles_season:e.target.value}))} />
+              <input name="doubles_all_time" placeholder="Doubles (All-Time)" value={newPlayer.doubles_all_time} onChange={(e)=>setNewPlayer(f=>({...f,doubles_all_time:e.target.value}))} />
+            </div>
+            <div style={{ marginTop:10 }}>
+              <button type="submit" className="sl-view-btn">Add Player ({tab})</button>
+            </div>
+          </form>
+        )}
+
+        {/* Roster grid */}
+        {loading ? (
+          <div className="sl-card sl-skeleton">Loading…</div>
+        ) : (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:12 }}>
+            {sorted.map((p) => (
+              <PlayerCard
+                key={p.id}
+                p={p}
+                isAdmin={isAdmin}
+                onEdit={onEditDone}
+                onDelete={onDelete}
+              />
+            ))}
+            {!sorted.length && (
+              <div className="sl-card" style={{ padding: 14 }}>
+                <div style={{ color:"#4f6475" }}>No players found.</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

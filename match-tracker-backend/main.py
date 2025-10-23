@@ -111,6 +111,31 @@ class MatchOut(BaseModel):
     status: str
     match_number: int
 
+class WinnerBody(BaseModel):
+    winner: str 
+
+def row_to_iso(row):
+    d = dict(row)
+    raw = d.get("date")
+    if isinstance(raw, datetime):
+        d["date"] = raw.replace(tzinfo=None).isoformat(timespec="seconds")
+    elif isinstance(raw, str) and raw:
+        # "YYYY-MM-DD HH:MM:SS.ffffff" -> "YYYY-MM-DDTHH:MM:SS"
+        isoish = raw.replace(" ", "T").split(".")[0]
+        try:
+            dt = datetime.fromisoformat(isoish)
+            d["date"] = dt.isoformat(timespec="seconds")
+        except Exception:
+            d["date"] = isoish
+    else:
+        d["date"] = None
+    return d
+
+def _looks_live(row):
+    st = str(row.get("status") or "").lower()
+    started = bool(row.get("started") or 0)
+    return (st in {"live", "in_progress", "in-progress"} or started) and st != "completed"
+
 @app.post("/schedule")
 async def create_match(match: Match):
     query = matches.insert().values(
@@ -125,11 +150,10 @@ async def create_match(match: Match):
     new_id = await database.execute(query)
     return {"id": new_id, "message": "Match created"}
 
-@app.get("/schedule", response_model=List[MatchOut])
+@app.get("/schedule")
 async def get_schedule():
-    query = matches.select()
-    results = await database.fetch_all(query)
-    return results
+    rows = await database.fetch_all(matches.select())
+    return [row_to_iso(r) for r in rows]
 
 
 @app.get("/schedule/{id}")
@@ -151,10 +175,11 @@ async def start_match(match_id: int):
     raise HTTPException(status_code=404, detail="Match not found")
 
 @app.post("/schedule/{match_id}/complete")
-async def complete_match(match_id: int, winner: str):
-    query = matches.update().where(matches.c.id == match_id).values(
-        status="completed",
-        winner=winner  # Add the winner to the match
+async def complete_match(match_id: int, body: WinnerBody):
+    query = (
+        matches.update()
+        .where(matches.c.id == match_id)
+        .values(status="completed", winner=body.winner, started=False)
     )
     result = await database.execute(query)
     if result:
@@ -321,18 +346,15 @@ async def update_scores(scores_id: int, scores_data: dict):
     return {"message": "scores updated", "scores": row}
 
 @app.get("/scores/match/{match_id}/all")
-async def get_all_scores_for_match(match_id: int):
-    # Query to fetch all scores for the given match_id
-    query = scores_tbl.select().where(scores_tbl.c.match_id == match_id)
-    scores_list = await database.fetch_all(query)
+async def get_scores(match_id: int):
+    q = scores_tbl.select().where(scores_tbl.c.match_id == match_id)
+    rows = await database.fetch_all(q)
+    if not rows: raise HTTPException(404, f"No scores for match {match_id}")
+    return rows
 
-    if not scores_list:
-        raise HTTPException(status_code=404, detail=f"No scores found for match {match_id}")
-
-    return {"match_id": match_id, "scores": scores_list}
 
 @app.post("/scores/match/{match_id}/complete")
-async def complete_match_and_transfer_scores(match_id: int):
+async def complete_match(match_id: int, winner: Literal["team", "opponent"]):
     # Fetch all scores for the given match_id
     scores_query = scores_tbl.select().where(scores_tbl.c.match_id == match_id)
     scores_list = await database.fetch_all(scores_query)
@@ -347,8 +369,13 @@ async def complete_match_and_transfer_scores(match_id: int):
             status_code=400,
             detail=f"Not all scores are completed for match {match_id}. Complete all scores before proceeding."
         )
-    # Update the match status to "completed"
-    update_match_query = matches.update().where(matches.c.id == match_id).values(status="completed")
+
+    # Update the match: set status and winner
+    update_match_query = (
+        matches.update()
+        .where(matches.c.id == match_id)
+        .values(status="completed", winner=winner)
+    )
     await database.execute(update_match_query)
 
-    return {"message": f"Match {match_id} completed, scores transferred to scoreboxes, and match status updated to 'completed'."}
+    return {"message": f"Match {match_id} completed; winner set to '{winner}'."}

@@ -1,725 +1,375 @@
-
-import React, { useEffect, useState } from "react";
+// src/pages/LiveScore.js
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import "../styles.css";
-import { useAdmin } from "../AdminContext"; 
-import BackButton from "./BackButton";
-import API_BASE_URL from "../config"; // adjust path if needed
+import API_BASE_URL from "../config";
+import { useAdmin } from "../AdminContext";
 
-export function ScoreInput({ value, onChange, onEnter }) {
-  const [focused, setFocused] = useState(false);
+
+export function ScoreInput(props) {
+  const initial =
+    props.value ??
+    props.currentGame ??
+    props.current_game ??
+    [0, 0];
+
+  const [a, b] = Array.isArray(initial) ? initial : [0, 0];
+  const vals = [0, 15, 30, 40];
+
+  const callChange = (next) => {
+    if (props.onChange) return props.onChange(next);
+    if (props.onChangeCurrentGame) return props.onChangeCurrentGame(next);
+    if (props.setValue) return props.setValue(next);
+    if (props.setCurrentGame) return props.setCurrentGame(next);
+  };
+
+  const setA = (v) => callChange([Number(v), b]);
+  const setB = (v) => callChange([a, Number(v)]);
+
   return (
-    <input
-      type="text"
-      value={
-        focused
-          ? value === null || isNaN(value) ? "" : value
-          : value === null || isNaN(value) ? "–" : value
-      }
-      className="score-input"
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => {
-        const val = e.target.value;
-        onChange(/^\d+$/.test(val) ? parseInt(val) : null);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && onEnter) {
-          onEnter();
-        }
-      }}
-    />
-  );
-}
-
-function PlayerAssignment({ matchIndex, matchType, onSave, onClose, playerList = [] }) {
-    const isDoubles = matchType === "Doubles";
-  
-    const [teamAPlayers, setTeamAPlayers] = useState(["", ""]);
-    const [teamBPlayers, setTeamBPlayers] = useState(["", ""]);
-  
-    const handleTeamAChange = (index, value) => {
-      const updated = [...teamAPlayers];
-      updated[index] = value;
-      setTeamAPlayers(updated);
-    };
-  
-    const handleTeamBChange = (index, value) => {
-      const updated = [...teamBPlayers];
-      updated[index] = value;
-      setTeamBPlayers(updated);
-    };
-  
-    return (
-      <div className="lineup-editor">
-        <h3 className="lineup-title">Assign Players</h3>
-  
-        <div style={{ marginBottom: "10px" }}>
-          <strong>Team A:</strong>
-          {[0, isDoubles ? 1 : null].map(
-            (i) =>
-              i !== null && (
-                <select
-                  key={i}
-                  value={teamAPlayers[i]}
-                  onChange={(e) => handleTeamAChange(i, e.target.value)}
-                  className="match-form"
-                >
-                  <option value="">Select Player {i + 1}</option>
-                  {playerList.map((p) => (
-                    <option key={p.id || p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              )
-          )}
-        </div>
-  
-        <div style={{ marginBottom: "10px" }}>
-          <strong>Team B:</strong>
-          {[0, isDoubles ? 1 : null].map(
-            (i) =>
-              i !== null && (
-                <input
-                  key={i}
-                  placeholder={`Player ${i + 1}`}
-                  value={teamBPlayers[i]}
-                  onChange={(e) => handleTeamBChange(i, e.target.value)}
-                />
-              )
-          )}
-        </div>
-        <button
-  className="save-button"
-  onClick={() => {
-    const teamA = isDoubles ? teamAPlayers.join(" & ") : teamAPlayers[0];
-    const teamB = isDoubles ? teamBPlayers.join(" & ") : teamBPlayers[0];
-
-    // Ask who is serving
-    const server = window.prompt("Who is serving first? Enter A or B", "A");
-
-    const serveValue = server === "B" ? 1 : 0;
-
-    onSave(matchIndex, teamA, teamB, serveValue); // pass serve info
-  }}
->
-  Save
-</button>
-        <button onClick={onClose}>Cancel</button>
+    <div className="score-input">
+      {props.label && <div className="score-input-label">{props.label}</div>}
+      <div className="score-input-row">
+        <select disabled={props.disabled} value={a} onChange={(e) => setA(e.target.value)} aria-label="Team game points">
+          {vals.map((v) => (<option key={v} value={v}>{v}</option>))}
+        </select>
+        <span className="score-input-sep">–</span>
+        <select disabled={props.disabled} value={b} onChange={(e) => setB(e.target.value)} aria-label="Opponent game points">
+          {vals.map((v) => (<option key={v} value={v}>{v}</option>))}
+        </select>
       </div>
-    );
-  }
-  
-  
-
-function LiveScore() {
-  const [nextMatch, setNextMatch] = useState(null);
-  const [showScore, setShowScore] = useState(false);
-  const [scores, setScores] = useState([]);
-  const [editableMatches, setEditableMatches] = useState([]);
-  const [showAssignIndex, setShowAssignIndex] = useState(null);
-  const [teamScore, setTeamScore] = useState([0, 0]); // [Team A, Team B]
-  const [eventStarted, setEventStarted] = useState(false);
-  const [eventFinished, setEventFinished] = useState(false);
-  const [playerList, setPlayerList] = useState([]);
-
-
-
-  const { isAdmin } = useAdmin();
-
-  const isEditable = (idx) => editableMatches.includes(idx);
-
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/players`)
-      .then((res) => res.json())
-      .then(setPlayerList)
-      .catch((err) => console.error("Failed to fetch players", err));
-  }, []);
-
-  useEffect(() => {
-    fetch( `${API_BASE_URL}/schedule`)
-      .then((res) => res.json())
-      .then((data) => {
-        const upcoming = data
-          .map((match) => ({ ...match, date: new Date(match.date) }))
-          .filter((match) => match.date > new Date())
-          .sort((a, b) => a.date - b.date);
-        setNextMatch(upcoming[0]); // Corrected the set function
-      })
-      .catch((err) => console.error("Failed to load schedule:", err));
-  }, []);
-  
-  const handleStartMatch = async () => {
-    try {
-      const matchResponse = await fetch(`${API_BASE_URL}/schedule/${nextMatch.id}/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-  
-      if (!matchResponse.ok) throw new Error("Failed to start match");
-      const matchData = await matchResponse.json();
-      console.log("Team match started:", matchData);
-  
-      const updated = [...scores];
-  
-      for (let idx = 0; idx < updated.length; idx++) {
-       
-  
-        const payload = {
-          match_id: nextMatch.id,         // Shared for all events
-          player1: "",                    // Unknown at start
-          player2: "",
-          sets: [],
-          current_game: [0, 0],
-          status: "pending",
-          started: false,
-          current_serve: null,
-        };
-  
-        const eventRes = await fetch(`${API_BASE_URL}/events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-  
-        if (!eventRes.ok) {
-          console.error(`❌ Failed to create event for match ${idx}`, await eventRes.text());
-          continue;
-        }
-  
-        const eventData = await eventRes.json();
-        console.log(`✅ Created empty event for match ${idx + 1}:`, eventData);
-  
-        updated[idx].eventId = eventData.id;
-        updated[idx].status = "pending";
-        updated[idx].started = false;
-        updated[idx].sets = [];
-        updated[idx].currentGame = [0, 0];
-        updated[idx].currentServe = null;
-      }
-  
-      setScores(updated);
-      setEventStarted(true);
-     
-  
-    } catch (error) {
-      console.error("Error starting all events:", error);
-    }
-  };
-
-  
-  useEffect(() => {
-    const checkEventStarted = async () => {
-      if (!nextMatch?.id) return;
-  
-      try {
-        const res = await fetch(`${API_BASE_URL}/events/match/${nextMatch.id}`);
-        const events = await res.json();
-  
-        if (events.length > 0) {
-          setEventStarted(true);
-      
-          const restoredScores = events.map((e, idx) => ({
-            match_id: e.match_id,
-            eventId: e.id,
-            player1: e.player1,
-            player2: e.player2,
-            sets: e.sets,
-            currentGame: e.current_game,
-            status: e.status,
-            started: e.started,
-            currentServe: e.current_serve,
-            matchType: e.sets.length === 3 ? "Singles" : "Doubles",
-            matchNumber: idx + 1,
-            winner: e.winner,
-          }));
-          setScores(restoredScores);
-          console.log("✅ Restored match from DB:", restoredScores);
-        } else {
-          console.log("🟡 No events found for this match");
-        }
-      } catch (err) {
-        console.error("❌ Error fetching event data:", err);
-      }
-    };
-  
-    checkEventStarted();
-  }, [nextMatch]);
-  
-  
-
-  const fetchScore = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/schedule`);
-      const schedule = await res.json();
-  
-      const matchTemplate = [
-        { matchType: "Doubles", matchNumber: 1 },
-        { matchType: "Doubles", matchNumber: 2 },
-        { matchType: "Doubles", matchNumber: 3 },
-        { matchType: "Singles", matchNumber: 1 },
-        { matchType: "Singles", matchNumber: 2 },
-        { matchType: "Singles", matchNumber: 3 },
-        { matchType: "Singles", matchNumber: 4 },
-        { matchType: "Singles", matchNumber: 5 },
-        { matchType: "Singles", matchNumber: 6 },
-      ];
-  
-      const enriched = matchTemplate.map((template) => {
-        const backendMatch = schedule.find(
-          (m) =>
-            m.match_type === template.matchType &&
-            m.match_number === template.matchNumber
-        );
-  
-        return {
-          ...template,
-          match_id: backendMatch?.id,
-          player1: backendMatch?.player1 || null,
-          player2: backendMatch?.player2 || null,
-          sets: [],
-          currentGame: [],
-          status: "pending",
-          started: false,
-        };
-      });
-  
-      console.log("Enriched match list with match IDs:", enriched.map((m) => m.match_id));
-      setScores(enriched);
-    } catch (err) {
-      console.error("Failed to fetch scores", err);
-    }
-  };
-  
-const handleShowScore = async () => {
-  setShowScore(true);
-
-  const matchTemplate = [
-    { matchType: "Doubles", matchNumber: 1 },
-    { matchType: "Doubles", matchNumber: 2 },
-    { matchType: "Doubles", matchNumber: 3 },
-    { matchType: "Singles", matchNumber: 1 },
-    { matchType: "Singles", matchNumber: 2 },
-    { matchType: "Singles", matchNumber: 3 },
-    { matchType: "Singles", matchNumber: 4 },
-    { matchType: "Singles", matchNumber: 5 },
-    { matchType: "Singles", matchNumber: 6 },
-  ];
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/events/match/${nextMatch.id}`);
-    const events = await res.json();
-
-    const merged = matchTemplate.map((template, idx) => {
-      const dbEvent = events[idx]; // Match by index (or enhance later by type/number)
-
-      if (dbEvent) {
-        return {
-          ...template,
-          match_id: dbEvent.match_id,
-          eventId: dbEvent.id,
-          player1: dbEvent.player1,
-          player2: dbEvent.player2,
-          sets: dbEvent.sets,
-          currentGame: dbEvent.current_game,
-          status: dbEvent.status,
-          started: dbEvent.started,
-          currentServe: dbEvent.current_serve,
-          winner: dbEvent.winner,
-        };
-      } else {
-        return {
-          ...template,
-          match_id: null,
-          eventId: null,
-          player1: null,
-          player2: null,
-          sets: [],
-          currentGame: [],
-          status: "pending",
-          started: false,
-          currentServe: null,
-        };
-      }
-    });
-
-    setScores(merged);
-    console.log("✅ Merged template with DB events:", merged);
-  } catch (err) {
-    console.error("❌ Error merging fallback with DB events:", err);
-  }
-};
-
-  
-  const handleSave = async (idx) => {
-    setEditableMatches((prev) => prev.filter((i) => i !== idx));
-    const updatedMatch = scores[idx];
-  
-    try {
-      const response = await fetch(`${API_BASE_URL}/events/${updatedMatch.eventId}`, {
-        method: "PUT", // Use PUT for updates
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          match_id: updatedMatch.match_id,
-          player1: updatedMatch.player1,
-          player2: updatedMatch.player2,
-          sets: updatedMatch.sets,
-          current_game: updatedMatch.currentGame,
-          status: updatedMatch.status,
-          started: updatedMatch.started,
-          current_serve: updatedMatch.currentServe,
-          winner: updatedMatch.winner, // ✅ correct scop
-
-
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to update event data");
-      const data = await response.json();
-      console.log("Event updated:", data);
-    } catch (err) {
-      console.error("Failed to update event:", err);
-    }
-  };
-  
-  useEffect(() => {
-    const savedScore = localStorage.getItem("teamScore");
-    if (savedScore) {
-      setTeamScore(JSON.parse(savedScore));
-    }
-  }, []);
-  
-  return (
-    <div style={{ padding: 20 }}>
-      <BackButton />
-      <h2 className="page-title">Live Score</h2>
-      <div className="next-match-container">
-        {!nextMatch ? (
-          <p className="no-match">No upcoming matches.</p>
-        ) : (
-          <>
-            <h3 className="match-heading">Playing Now</h3>
-            <p className="match-info">
-              {nextMatch.date.toLocaleString()} — {nextMatch.opponent} ({nextMatch.location})
-            </p>
-            {isAdmin && (!eventStarted || eventFinished) && (
-  <button className="event-button" onClick={handleStartMatch}>
-    Start Event
-  </button>
-)}
-
-
-{isAdmin && eventStarted && !eventFinished && (
-  <button
-    className="event-button"
-    onClick={async () => {
-      // 🔒 1. Check if all matches are completed
-      const incomplete = scores.filter((s) => s.status !== "completed");
-      if (incomplete.length > 0) {
-        alert("You must complete all 9 matches before finishing the event.");
-        return;
-      }
-
-      try {
-        // 2. Mark the match as completed
-        const res = await fetch(`${API_BASE_URL}/schedule/${nextMatch.id}/complete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-
-        if (!res.ok) throw new Error("Failed to mark match as completed");
-
-        console.log("✅ Match marked completed");
-
-        // 3. Reset frontend state
-        setScores([]);
-        setTeamScore([0, 0]);
-        localStorage.removeItem(`teamScore_${nextMatch.id}`);
-        setEventStarted(false);
-        setEventFinished(true);
-        setShowScore(false);
-
-        // Update the match status locally
-        setNextMatch((prev) => ({
-          ...prev,
-          status: "completed",
-        }));
-      } catch (err) {
-        console.error("❌ Error finishing event:", err);
-        alert("Failed to complete event.");
-      }
-    }}
-  >
-    Finish Event
-  </button>
-)}
-
-<h2 className="page-title">Live Score</h2>
-{eventStarted && !eventFinished ? (
-  <>
-    <h3 style={{ marginBottom: 20 }}>
-      Current Score: {teamScore[0]} - {teamScore[1]}
-    </h3>
-
-    {!showScore && (
-  <button className="nav-button" onClick={handleShowScore}>
-    Show Live Score
-  </button>
-)}
-  </>
-) : eventFinished ? (
-  <p style={{ color: "gray" }}>The event has finished. Live scores are no longer available.</p>
-) : (
-  <p style={{ color: "red" }}>You must start the event to view live scores.</p>
-)}
-          </>
-        )}
-      </div>
-
-      {showScore && (
-  <>
-    <div className="match-list">
-      {scores
-  .filter((score) => score.status === "live") // Only show live matches
-  .map((score, idx) => {
-        if (!score.started) {
-          // ✅ Admins see the match box and the assign button
-          return isAdmin ? (
-            <div key={idx} className="match-status-box not-started">
-              <h3>{score.matchType} #{score.matchNumber}</h3>
-              <button className="nav-button" onClick={() => setShowAssignIndex(idx)}>
-                Assign Players & Start
-              </button>
-            </div>
-          ) : null; // 👈 guests see nothing
-        }
-
-              const sets = score.sets || [];
-              const currentGame = score.currentGame || [null, null];
-              const players = [score.player1 || "Player 1", score.player2 || "Player 2"];
-
-              return (
-                <div
-                  key={idx}
-                  className={`match-status-box ${score.status === "live" ? "live" : "completed"}`}
-                >
-                  <div className="match-header">
-                    <h3 className="match-title">{score.matchType} #{score.matchNumber}</h3>
-                    <div>
-  {isEditable(idx) ? (
-    <button onClick={() => handleSave(idx)} className="save-button">
-      Save
-    </button>
-  ) : isAdmin && (
-    <>
-      <button
-        onClick={() => setEditableMatches((prev) => [...prev, idx])}
-        className="edit-button"
-      >
-        Edit Score
-      </button>
-      {score.status === "live" && (
-        <button
-          className="end-button"
-          onClick={async () => {
-            const winner = window.prompt("Who won? (A or B)")?.toUpperCase();
-          
-            if (winner !== "A" && winner !== "B") {
-              alert("Invalid input. Type A or B.");
-              return;
-            }
-            if (winner === "A") {
-                const newScore = [teamScore[0] + 1, teamScore[1]];
-                setTeamScore(newScore);
-                localStorage.setItem(`teamScore_${nextMatch.id}`, JSON.stringify(newScore));
-
-              } else if (winner === "B") {
-                const newScore = [teamScore[0], teamScore[1] + 1];
-                setTeamScore(newScore);
-                localStorage.setItem(`teamScore_${nextMatch.id}`, JSON.stringify(newScore));
-
-              }
-            const updated = [...scores];
-            updated[idx].status = "completed";
-            updated[idx].winner = winner; // ✅ mark who won
-            setScores(updated);
-          
-            const match = updated[idx];
-          
-            try {
-              await fetch(`${API_BASE_URL}/events/${match.eventId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  match_id: match.match_id,
-                  player1: match.player1,
-                  player2: match.player2,
-                  sets: match.sets,
-                  current_game: match.currentGame,
-                  status: "completed",
-                  started: match.started,
-                  current_serve: match.currentServe,
-                  winner: winner, // 👈 only if you add this to the DB
-                }),
-              });
-              console.log(`✅ Match ${idx + 1} marked as completed`);
-            } catch (err) {
-              console.error("❌ Failed to update match:", err);
-            }
-          }}
-          
-        >
-          End Match
-        </button>
-      )}
-    </>
-  )}
-</div>
-
-                  </div>
-
-                  <table className="match-table">
-                    <thead>
-                      <tr>
-                        <th></th>
-                        {sets.map((_, index) => <th key={index}>Set {index + 1}</th>)}
-                        <th>Game</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {players.map((player, i) => (
-                        <tr key={i}>
-   <td style={{ fontWeight: "bold", padding: 8 }}>
-  {player}
-  {" "}
-  {(() => {
-  const initialServer = score.currentServe ?? 0; // 0 for A, 1 for B
-  const totalGames = sets.reduce((sum, set) => sum + set.reduce((a, b) => a + b, 0), 0);
-  const serverIndex = (initialServer + totalGames) % 2; // alternate each game
-  const matchWinner = scores[idx]?.winner;
-  const isServer = i === serverIndex;
-  const isWinner = (matchWinner === "A" && i === 0) || (matchWinner === "B" && i === 1);
-  
-    return (
-      <>
-        {isServer ? "🎾" : ""}
-        {isWinner ? " ✅" : ""}
-      </>
-    );
-  })()}
-</td>
-
-
-
-                          {sets.map((set, j) => (
-                            <td key={j}>
-                              {isEditable(idx) ? (
-                                <ScoreInput value={set[i]} onChange={(val) => {
-                                  const updatedScores = [...scores];
-                                  updatedScores[idx].sets[j][i] = val;
-                                  setScores(updatedScores);
-                                }} onEnter={() => handleSave(idx)} />
-                              ) : (
-                                set[i] ?? "–"
-                              )}
-                            </td>
-                          ))}
-                          <td>
-                            {isEditable(idx) ? (
-                              <ScoreInput value={currentGame[i]} onChange={(val) => {
-                                const updatedScores = [...scores];
-                                updatedScores[idx].currentGame[i] = val;
-                                setScores(updatedScores);
-                              }} onEnter={() => handleSave(idx)} />
-                            ) : (
-                              currentGame[i] ?? "–"
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
-
-          {showAssignIndex !== null && (
-            <div style={{
-              position: "fixed",
-              top: 100,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 9999,
-              background: "#fff",
-              padding: 20,
-              border: "2px solid black"
-            }}>
-<PlayerAssignment
-  matchIndex={showAssignIndex}
-  matchType={scores[showAssignIndex]?.matchType}
-  onSave={async (idx, p1, p2, serveValue) => {
-    const updated = [...scores];
-    if (!updated[idx]) return;
-  
-    updated[idx].player1 = p1;
-    updated[idx].player2 = p2;
-    updated[idx].started = true;
-    updated[idx].status = "live";
-    updated[idx].sets = updated[idx].matchType === "Singles"
-      ? [[0, 0], [0, 0], [0, 0]]
-      : [[0, 0]];
-    updated[idx].currentGame = [0, 0];
-    updated[idx].currentServe = serveValue;
-
-  
-    const matchId = nextMatch?.id; // ✅ shared match_id for all events
-    if (!matchId) {
-      console.error("No shared match ID available");
-      return;
-    }
-  
-    try {
-      const payload = {
-        match_id: matchId, // ✅ same for all
-        player1: p1,
-        player2: p2,
-        sets: updated[idx].sets,
-        current_game: updated[idx].currentGame,
-        status: "live",
-        started: true,
-        current_serve: serveValue,
-      };
-  
-      console.log(`Creating event for box ${idx}`, payload);
-  
-      const response = await fetch(`${API_BASE_URL}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-  
-      if (!response.ok) throw new Error("Failed to create event");
-      const data = await response.json();
-  
-      updated[idx].eventId = data.id;
-      setScores(updated);
-      setShowAssignIndex(null);
-      console.log("Box event created:", data);
-    } catch (error) {
-      console.error("Error creating event:", error);
-    }
-  }}
-  
-  
-  onClose={() => setShowAssignIndex(null)}
-  playerList={playerList}
-/>
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
 
-export default LiveScore;
+
+/* ---------- Top Nav (same look/feel) ---------- */
+function TopNav({ name, hasLive }) {
+  return (
+    <header className="sl-topnav">
+      <div className="sl-brand">
+        <img src="/saint-leo-logo.png" alt="Saint Leo" />
+        <div className="sl-brand-text">
+          <span className="sl-brand-title">Saint Leo</span>
+          <span className="sl-brand-sub">Tennis</span>
+        </div>
+      </div>
+
+      <nav className="sl-navlinks">
+        <Link to="/dashboard" className="sl-navlink">Dashboard</Link>
+        <Link to="/players" className="sl-navlink">Roster</Link>
+        <Link to="/schedule" className="sl-navlink">Schedule</Link>
+        {hasLive && <Link to="/livescore" className="sl-navlink sl-navlink-accent">Live Scores</Link>}
+        {!hasLive && <Link to="/livescore" className="sl-navlink">Scores</Link>}
+        <Link to="/admin" className="sl-navlink">Admin Panel</Link>
+      </nav>
+
+      <div className="sl-userbox">
+        <span className="sl-username">{name}</span>
+        <button className="sl-logout" onClick={() => { localStorage.clear(); }}>
+          Logout
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/* ---------- utils ---------- */
+const TOKEN = localStorage.getItem("token") || "";
+async function fetchJSON(url) {
+  try {
+    const r = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+      },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+function looksLive(m) {
+  const st = String(m?.status ?? "").toLowerCase();
+  const started = Boolean(m?.started);
+  return (st === "live" || st === "in_progress" || st === "in-progress" || started) && st !== "completed";
+}
+function parseDateSafe(s) {
+  if (!s) return null;
+  const clean = String(s).replace(" ", "T").replace(/\.\d+$/, "");
+  const d = new Date(clean);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const fmtDate = (iso) => {
+  const d = parseDateSafe(iso);
+  return d
+    ? d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "TBD";
+};
+function useCountdown(iso) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!iso) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [iso]);
+  const target = iso ? parseDateSafe(iso)?.getTime() ?? 0 : 0;
+  const diff = Math.max(0, target - now);
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  return { d, h, m, s };
+}
+
+// set helpers
+const toSetsArray = (sets) => {
+  if (!Array.isArray(sets)) return [];
+  if (Array.isArray(sets[0])) return sets.map(p => ({ team: +(p[0] ?? 0), opp: +(p[1] ?? 0) }));
+  return sets.map(s => ({ team: +(s.team ?? 0), opp: +(s.opp ?? 0) }));
+};
+const setsToChips = (sets) => toSetsArray(sets);
+const typeLabel = (s) => `${(s.match_type || "").toLowerCase() === "doubles" ? "Doubles" : "Singles"} ${s.line_no ?? ""}`.trim();
+const sideText = (s, opp=false) => {
+  const a1 = opp ? s.opponent1 : s.player1;
+  const a2 = opp ? s.opponent2 : s.player2;
+  if ((s.match_type || "").toLowerCase() === "doubles") return [a1, a2].filter(Boolean).join(" & ") || "TBD & TBD";
+  return a1 || "TBD";
+};
+const gameLabel = (cg) => {
+  if (!Array.isArray(cg) || cg.length < 2) return "—";
+  return `${cg[0] ?? 0}–${cg[1] ?? 0}`; // your backend already sends 0/15/30/40
+};
+
+/* ---------- data loaders ---------- */
+async function fetchLiveMatch() {
+  for (const u of [
+    `${API_BASE_URL}/schedule?status=live`,
+    `${API_BASE_URL}/schedule`,
+  ]) {
+    const d = await fetchJSON(u);
+    if (!d) continue;
+    const arr = Array.isArray(d) ? d : [d];
+    const found = arr.find(looksLive);
+    if (found) {
+      const full = await fetchJSON(`${API_BASE_URL}/matches/${found.id}`);
+      return full || found;
+    }
+  }
+  return null;
+}
+async function fetchScores(matchId) {
+  const d = await fetchJSON(`${API_BASE_URL}/matches/${matchId}/scores`);
+  return Array.isArray(d) ? d : [];
+}
+async function fetchUpcoming() {
+  for (const u of [
+    `${API_BASE_URL}/schedule/upcoming`,
+    `${API_BASE_URL}/schedule?status=scheduled`,
+    `${API_BASE_URL}/schedule`,
+  ]) {
+    const d = await fetchJSON(u);
+    if (!d) continue;
+    const arr = Array.isArray(d) ? d : [d];
+    const future = arr
+      .filter(m => String(m?.status || "").toLowerCase() !== "completed")
+      .filter(m => parseDateSafe(m?.date)?.getTime() >= Date.now())
+      .sort((a,b) => (parseDateSafe(a?.date)?.getTime() ?? 0) - (parseDateSafe(b?.date)?.getTime() ?? 0));
+    if (future.length) return future[0];
+  }
+  return null;
+}
+
+/* ---------- small UI atoms ---------- */
+function StatusChip({ status }) {
+  const st = String(status || "").toLowerCase();
+  if (st === "live") return <span className="sl-chip sl-chip-live">LIVE</span>;
+  if (st === "completed") return <span className="sl-chip">COMPLETED</span>;
+  if (st === "scheduled") return <span className="sl-chip">SCHEDULED</span>;
+  return <span className="sl-chip">{String(status || "STATUS").toUpperCase()}</span>;
+}
+function ServeDot({ side }) {
+  // side: "team" | "opp" | null
+  if (!side) return null;
+  return <span className={`serve-dot ${side === "team" ? "serve-team" : "serve-opp"}`} title={`${side} serving`} />;
+}
+
+/* ---------- main component ---------- */
+export default function LiveScore() {
+  const { isAdmin } = useAdmin();
+  const guestName = localStorage.getItem("guestName") || (isAdmin ? "Admin" : "Guest");
+
+  const [match, setMatch] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [nextMatch, setNextMatch] = useState(null);
+
+  const hasLive = !!match;
+
+  // compute dual score (completed lines only)
+  const dualScore = useMemo(() => {
+    let team = 0, opp = 0;
+    for (const r of rows) {
+      const w = String(r?.winner || "").toLowerCase();
+      if (w === "team") team++;
+      else if (w === "opponent") opp++;
+    }
+    return { team, opp };
+  }, [rows]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const m = await fetchLiveMatch();
+      if (!mounted) return;
+      if (m?.id) {
+        setMatch(m);
+        const sc = await fetchScores(m.id);
+        if (!mounted) return;
+        setRows(sc);
+      } else {
+        setMatch(null);
+        const up = await fetchUpcoming();
+        if (!mounted) return;
+        setNextMatch(up);
+      }
+      setLoading(false);
+    })();
+
+    const t = setInterval(async () => {
+      const m = await fetchLiveMatch();
+      if (!mounted) return;
+      if (m?.id) {
+        setMatch(m);
+        const sc = await fetchScores(m.id);
+        if (!mounted) return;
+        setRows(sc);
+      } else {
+        setMatch(null);
+      }
+    }, 5000);
+
+    return () => { mounted = false; clearInterval(t); };
+  }, []);
+
+  /* countdown for empty state */
+  const { d, h, m: mm, s } = useCountdown(nextMatch?.date);
+
+  
+  return (
+    <>
+      <TopNav name={guestName} hasLive={hasLive} />
+
+      <div className="sl-main" style={{ maxWidth: 1100, margin: "16px auto", padding: "0 16px" }}>
+        <h1 className="sl-welcome">Live Scores</h1>
+        <p className="sl-subtitle">Real-time updates for current matches</p>
+
+        {loading ? (
+          <div className="sl-card sl-skeleton">Loading…</div>
+        ) : hasLive ? (
+          <>
+            {/* Header scoreboard */}
+            <div className="ls-header sl-card">
+              <div className="ls-left">
+                <div className="ls-kicker">
+                  <span className="sl-live-dot">•</span> Live match in progress
+                </div>
+                <div className="ls-title">
+                  {match?.opponent ? `Lions vs ${match.opponent}` : "Live Match"}
+                </div>
+                <div className="ls-meta">
+                  {fmtDate(match?.date)} {match?.location ? `• ${match.location}` : ""}
+                </div>
+              </div>
+              <div className="ls-right">
+                <div className="ls-scorebox">
+                  <div className="ls-score">{dualScore.team}</div>
+                  <div className="ls-score-sep">–</div>
+                  <div className="ls-score">{dualScore.opp}</div>
+                  <div className="ls-score-label">Team Points</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lines grid */}
+            <div className="ls-grid">
+              {rows.map((r) => {
+                const sets = setsToChips(r.sets);
+                const serveSide = r.current_serve === 0 ? "team" : r.current_serve === 1 ? "opp" : null;
+                return (
+                  <div key={r.id} className="ls-line sl-card">
+                    <div className="ls-line-head">
+                      <div className="ls-line-type">{typeLabel(r)}</div>
+                      <StatusChip status={r.status} />
+                    </div>
+
+                    <div className="ls-line-body">
+                      <div className="ls-side">
+                        <div className="ls-names">
+                          <ServeDot side={serveSide === "team" ? "team" : null} />
+                          <span className="ls-team">{sideText(r, false)}</span>
+                        </div>
+                        <div className="ls-names">
+                          <ServeDot side={serveSide === "opp" ? "opp" : null} />
+                          <span className="ls-opp">{sideText(r, true)}</span>
+                        </div>
+                      </div>
+
+                      <div className="ls-sets">
+                        {sets.length ? sets.map((s, i) => (
+                          <span key={i} className="set-chip">{s.team}–{s.opp}</span>
+                        )) : <span className="set-chip set-empty">—</span>}
+                      </div>
+
+                      <div className="ls-game">
+                        <div className="ls-game-label">Game</div>
+                        <div className="ls-game-val">{gameLabel(r.current_game)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!rows.length && (
+                <div className="sl-card" style={{ padding: 14 }}>
+                  No individual lines yet. As scores are entered, they’ll appear here.
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="sl-next-pretty">
+            <div className="sl-next-left">
+              <div className="sl-next-title">No live matches right now</div>
+              <div className="sl-next-sub">Next match is in:</div>
+              {nextMatch?.date ? (
+                <div className="sl-countdown">
+                  <div className="sl-unit"><span>{String(d).padStart(2,"0")}</span><small>days</small></div>
+                  <div className="sl-colon">:</div>
+                  <div className="sl-unit"><span>{String(h).padStart(2,"0")}</span><small>hrs</small></div>
+                  <div className="sl-colon">:</div>
+                  <div className="sl-unit"><span>{String(mm).padStart(2,"0")}</span><small>min</small></div>
+                  <div className="sl-colon">:</div>
+                  <div className="sl-unit"><span>{String(s).padStart(2,"0")}</span><small>sec</small></div>
+                </div>
+              ) : (
+                <div className="sl-next-fallback">TBD — check schedule</div>
+              )}
+
+              <div className="sl-next-meta">
+                {nextMatch?.opponent ? `Lions vs ${nextMatch.opponent}` : "Opponent TBA"}
+                {nextMatch?.location ? ` • ${nextMatch.location}` : ""}
+              </div>
+              <div className="sl-next-date">{fmtDate(nextMatch?.date)}</div>
+            </div>
+
+            <div className="sl-next-right">
+              <Link className="sl-view-btn" to="/schedule">View Schedule</Link>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
