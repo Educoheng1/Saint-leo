@@ -207,7 +207,11 @@ export default function LiveScore() {
 
   const hasLive = !!match;
 
-  // compute dual score (completed lines only)
+  // Separate doubles and singles
+  const doubles = rows.filter((r) => r.match_type === "doubles");
+  const singles = rows.filter((r) => r.match_type === "singles");
+
+  // Compute dual score (completed lines only)
   const dualScore = useMemo(() => {
     let team = 0, opp = 0;
     for (const r of rows) {
@@ -254,10 +258,9 @@ export default function LiveScore() {
     return () => { mounted = false; clearInterval(t); };
   }, []);
 
-  /* countdown for empty state */
+  /* Countdown for empty state */
   const { d, h, m: mm, s } = useCountdown(nextMatch?.date);
 
-  
   return (
     <>
       <TopNav name={guestName} hasLive={hasLive} />
@@ -293,9 +296,10 @@ export default function LiveScore() {
               </div>
             </div>
 
-            {/* Lines grid */}
+            {/* Doubles Section */}
+            <h2 className="ls-section-title">Doubles</h2>
             <div className="ls-grid">
-              {rows.map((r) => {
+              {doubles.map((r) => {
                 const sets = setsToChips(r.sets);
                 const serveSide = r.current_serve === 0 ? "team" : r.current_serve === 1 ? "opp" : null;
                 return (
@@ -331,9 +335,55 @@ export default function LiveScore() {
                   </div>
                 );
               })}
-              {!rows.length && (
+              {!doubles.length && (
                 <div className="sl-card" style={{ padding: 14 }}>
-                  No individual lines yet. As scores are entered, they’ll appear here.
+                  No doubles matches yet.
+                </div>
+              )}
+            </div>
+
+            {/* Singles Section */}
+            <h2 className="ls-section-title">Singles</h2>
+            <div className="ls-grid">
+              {singles.map((r) => {
+                const sets = setsToChips(r.sets);
+                const serveSide = r.current_serve === 0 ? "team" : r.current_serve === 1 ? "opp" : null;
+                return (
+                  <div key={r.id} className="ls-line sl-card">
+                    <div className="ls-line-head">
+                      <div className="ls-line-type">{typeLabel(r)}</div>
+                      <StatusChip status={r.status} />
+                    </div>
+
+                    <div className="ls-line-body">
+                      <div className="ls-side">
+                        <div className="ls-names">
+                          <ServeDot side={serveSide === "team" ? "team" : null} />
+                          <span className="ls-team">{sideText(r, false)}</span>
+                        </div>
+                        <div className="ls-names">
+                          <ServeDot side={serveSide === "opp" ? "opp" : null} />
+                          <span className="ls-opp">{sideText(r, true)}</span>
+                        </div>
+                      </div>
+
+                      <div className="ls-sets">
+                        {sets.length ? sets.map((s, i) => (
+                          <span key={i} className="set-chip">{s.team}–{s.opp}</span>
+                        )) : <span className="set-chip set-empty">—</span>}
+                      </div>
+
+                      <div className="ls-game">
+                        <div className="ls-game-label">Game</div>
+                        <div className="ls-game-val">{gameLabel(r.current_game)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!singles.length && (
+                <div className="sl-card" style={{ padding: 14 }}>
+                  No singles matches yet.
                 </div>
               )}
             </div>

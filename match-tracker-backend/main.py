@@ -31,18 +31,17 @@ metadata.create_all(engine)
 app = FastAPI()
 
 
-# CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000", "http://127.0.0.1:3000",  # local React dev server
-        "https://saint-leo-live-scores.onrender.com"  # your deployed frontend
+        "http://localhost:3000",  # Local React development server
+        "http://127.0.0.1:3000",  # Alternative localhost
+        "https://saint-leo-live-scores.onrender.com",  # Deployed frontend
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,  # Correct argument name
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
-
 # Connect database on startup/shutdown
 @app.on_event("startup")
 async def startup():
@@ -329,7 +328,7 @@ async def start_match(match_id: int):
     scores_to_create = []
     for i in range(1, 10):
         if i <= 3:
-            # First 3 are doubles (1 set each)
+            # First 3 are doubles
             scores_to_create.append({
                 "match_id": match_id,
                 "line_no": i,
@@ -338,42 +337,37 @@ async def start_match(match_id: int):
                 "player2": f"Doubles Player {i}B",
                 "opponent1": f"Doubles Opponent {i}A",
                 "opponent2": f"Doubles Opponent {i}B",
-                "sets": [[0, 0]],  # 1 set for doubles
+                "sets": [],  # Empty sets to start
                 "current_game": [0, 0],
                 "status": "live",
-                "started": True,
+                "started": 1,
                 "current_serve": 0,
                 "winner": None,
             })
         else:
-            # Next 6 are singles (3 sets each)
+            # Next 6 are singles
             line_no = i - 3
             scores_to_create.append({
                 "match_id": match_id,
-                "line_no": i,
+                "line_no": line_no,
                 "match_type": "singles",
                 "player1": f"Singles Player {line_no}",
                 "player2": None,
                 "opponent1": f"Singles Opponent {line_no}",
                 "opponent2": None,
-                "sets": [[0, 0], [0, 0], [0, 0]],  # 3 sets for singles
+                "sets": [],  # Empty sets to start
                 "current_game": [0, 0],
                 "status": "live",
-                "started": True,
+                "started": 1,
                 "current_serve": 0,
                 "winner": None,
             })
 
-    # Insert all scores into the database
+    # Insert the scores into the database
     await database.execute_many(scores_tbl.insert(), scores_to_create)
 
-    # Fetch the updated match
-    updated_match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
-    return {
-        "message": "Match started and scores created",
-        "match": row_to_iso(updated_match),
-        "scores": scores_to_create,
-    }
+    return {"message": f"Match {match_id} started and scores created successfully"}
+
 @app.post("/schedule/{match_id}/complete")
 async def complete_match(match_id: int, winner: Literal["team", "opponent"]):
     match = await database.fetch_one(matches.select().where(matches.c.id == match_id))

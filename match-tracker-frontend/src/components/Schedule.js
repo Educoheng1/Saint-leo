@@ -84,6 +84,7 @@ async function fetchJSON(url) {
   }
 }
 
+
 async function getMatchesByGender(gender) {
   const urls = [
     `${API_BASE_URL}/schedule?gender=${gender}`,

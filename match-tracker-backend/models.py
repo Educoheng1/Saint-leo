@@ -1,6 +1,9 @@
 from sqlalchemy import MetaData, Table, Column, Integer, String, DateTime, JSON,ForeignKey
 from sqlalchemy import create_engine
 from databases import Database
+from typing import Optional
+from pydantic import BaseModel
+from typing import List
 
 
 DATABASE_URL = "sqlite:///./matches.db"
@@ -65,6 +68,8 @@ scores = Table(
     Column("match_id", Integer, ForeignKey("matches.id"), nullable=False),  # FK to matches table
     Column("player1", String, nullable=True),
     Column("player2", String, nullable=True),
+    Column("opponent1", String, nullable=True),  # Ensure this column exists
+    Column("opponent2", String, nullable=True),
     Column("sets", JSON, nullable=True),       # JSON to store sets data
     Column("current_game", JSON, nullable=True),  # JSON to store current game score
     Column("status", String, nullable=False, default="pending"),  # e.g., 'live', 'completed'
@@ -74,3 +79,16 @@ scores = Table(
     Column("line_no", Integer, nullable=False, default=1),
     Column("match_type", String, nullable=True),
 )
+class UpdateScore(BaseModel):
+    player1: Optional[str] = None
+    player2: Optional[str] = None
+    opponent1: Optional[str] = None
+    opponent2: Optional[str] = None
+    match_type: Optional[str] = None
+    status: Optional[str] = None
+    winner: Optional[str] = None
+    line_no: Optional[int] = None
+    sets: Optional[List[List[int]]] = None
+    current_game: Optional[List[int]] = None
+    started: Optional[bool] = None
+    current_serve: Optional[str] = None

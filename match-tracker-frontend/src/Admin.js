@@ -164,11 +164,26 @@ async function deleteMatch(id) {
 
 // Live controls
 async function startMatch(id) {
-  const body = { status:"live", started:1 };
-  return (await putJSON(`${API_BASE_URL}/schedule/${id}`, body))
-      || (await patchJSON(`${API_BASE_URL}/schedule/${id}`, body))
-      || (await postJSON(`${API_BASE_URL}/schedule/${id}/start`, {}))
-      || (await putJSON(`${API_BASE_URL}/schedule/${id}`, body));
+  console.log("Starting match with ID:", id);
+  const body = { status: "live", started: 1 };
+  try {
+    const response = await fetch(`${API_BASE_URL}/schedule/${id}/start`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    console.log("Start match response:", data);
+    if (!response.ok) {
+      throw new Error(data.detail || "Failed to start match");
+    }
+    return true;
+  } catch (error) {
+    console.error("Error starting match:", error);
+    return false;
+  }
 }
 export async function endMatch(id, winner = "team") {
   const res = await fetch(`/schedule/${id}/complete`, {
