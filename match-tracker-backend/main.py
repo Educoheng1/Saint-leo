@@ -369,16 +369,30 @@ async def start_match(match_id: int):
 
     return {"message": f"Match {match_id} started and scores created successfully"}
 
-@app.post("/schedule/{match_id}/complete")
-async def complete_match(match_id: int, winner: Literal["team", "opponent"]):
-    match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
-    if not match:
-        raise HTTPException(status_code=404, detail="Match not found")
 
-    await database.execute(
-        matches.update().where(matches.c.id == match_id).values(status="completed", winner=winner)
+@app.post("/schedule/{match_id}/complete")
+async def complete_match(match_id: int, body: WinnerBody):
+    # update DB
+    query = (
+        matches.update()
+        .where(matches.c.id == match_id)
+        .values(
+            status="completed",
+            winner=body.winner,
+        )
     )
-    return {"message": f"Match {match_id} completed; winner set to '{winner}'."}
+    result = await database.execute(query)
+
+    if result:
+        updated_match = await database.fetch_one(
+            matches.select().where(matches.c.id == match_id)
+        )
+        return {
+            "message": "Match completed",
+            "match": dict(updated_match) if updated_match else None,
+        }
+
+    raise HTTPException(status_code=404, detail="Match not found")
 
 @app.delete("/schedule/{match_id}")
 async def delete_match_and_scores(match_id: int):

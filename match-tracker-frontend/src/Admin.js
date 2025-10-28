@@ -185,18 +185,50 @@ async function startMatch(id) {
     return false;
   }
 }
-export async function endMatch(id, winner = "team") {
-  const res = await fetch(`/schedule/${id}/complete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ winner }),
-  });
-  if (!res.ok) {
-    console.error("endMatch failed", res.status, await res.text());
-    return false;
+async function endMatch(matchId) {
+  // Ask the admin who won
+  const winner = window.prompt(
+    "Who won this match? Type 'team' for Saint Leo or 'opponent' for the other team:"
+  );
+
+  // If they canceled or typed something weird, just stop
+  if (!winner || !["team", "opponent"].includes(winner.trim().toLowerCase())) {
+    console.error("Invalid winner choice:", winner);
+    alert("Match not ended. Please type exactly: team  or  opponent.");
+    return;
   }
-  return true;
+
+  const cleanWinner = winner.trim().toLowerCase();
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/schedule/${matchId}/complete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ winner: cleanWinner }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("endMatch failed", res.status, text);
+      alert("Failed to end match: " + res.status);
+      return;
+    }
+
+    const data = await res.json();
+    console.log("Match completed:", data);
+    alert(`Match ended. Winner: ${cleanWinner === "team" ? "Saint Leo" : "Other team"}`);
+
+    // optional: refresh UI after ending
+    // reload live match / clear it
+    // e.g. setLiveMatch(null); setHasLive(false); setLines([]);
+  } catch (err) {
+    console.error("endMatch error", err);
+    alert("Network error ending match.");
+  }
 }
+
 
 // Scores
 async function saveScoreLine(matchId, row) {
@@ -274,24 +306,47 @@ export default function Admin() {
   /* ----- boot ----- */
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      const [pl, ms, lm] = await Promise.all([loadPlayers(), loadMatches(), loadLive()]);
-      if (!mounted) return;
-      setPlayers(pl);
-      setMatches(ms);
-      setLiveMatch(lm);
-      setHasLive(Boolean(lm));
-      if (lm?.id) setLines(await loadScores(lm.id));
-    })();
-    const t = setInterval(async () => {
-      const lm = await loadLive();
-      setLiveMatch(lm);
-      setHasLive(Boolean(lm));
-      if (lm?.id) setLines(await loadScores(lm.id));
-    }, 8000);
-    return () => { mounted = false; clearInterval(t); };
+  
+    async function tick() {
+      try {
+        const lm = await loadLive();
+  
+        if (!mounted) return;
+  
+        setHasLive(Boolean(lm));
+  
+        // only update liveMatch if it actually changed
+        setLiveMatch(prev => {
+          const same = JSON.stringify(prev) === JSON.stringify(lm);
+          return same ? prev : lm;
+        });
+  
+        if (lm?.id) {
+          const newLines = await loadScores(lm.id);
+          if (!mounted) return;
+  
+          // only update lines if it actually changed
+          setLines(prev => {
+            const same = JSON.stringify(prev) === JSON.stringify(newLines);
+            return same ? prev : newLines;
+          });
+        }
+      } catch (err) {
+        console.error("poll error", err);
+      }
+    }
+  
+    // run once immediately so the UI isn't empty for 8s
+    tick();
+  
+    const t = setInterval(tick, 8000);
+  
+    return () => {
+      mounted = false;
+      clearInterval(t);
+    };
   }, []);
-
+  
   /* ----- derived ----- */
   const matchesByGender = useMemo(() => matches.filter(m => m.gender===genderTab), [matches, genderTab]);
   const scheduled = matchesByGender.filter(m => m.status?.toLowerCase() === "scheduled").sort((a,b)=> (parseDateSafe(a.date)?.getTime() ?? 0) - (parseDateSafe(b.date)?.getTime() ?? 0));
@@ -463,7 +518,12 @@ export default function Admin() {
                         ))}
                     </select>
                   )}
-                  {liveMatch && <button className="sl-logout" onClick={()=>doEnd(liveMatch.id)}>End Match</button>}
+                  {liveMatch && <button
+  onClick={() => endMatch(liveMatch.id)}
+  className="btn btn-danger"
+>
+  End Match
+</button>}
                 </div>
               </div>
             </div>
