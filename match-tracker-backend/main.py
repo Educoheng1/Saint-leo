@@ -36,7 +36,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",  # Local React development server
         "http://127.0.0.1:3000",  # Alternative localhost
-        "https://saint-leo-live-scores.onrender.com",  # Deployed frontend
+        "https://saint-leo-live-scores.onrender.com", 
+         "https://saint-leo-live-score.onrender.com",
     ],
     allow_credentials=True,  # Correct argument name
     allow_methods=["*"],  # Allow all HTTP methods
