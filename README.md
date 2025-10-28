@@ -1,4 +1,8 @@
 # Saint-leo
+<<<<<<< HEAD
+=======
+# Saint-leo
+>>>>>>> fc83d4c8118d68fbe3bf1c8db5cdf8d287941e51
 Saint Leo Tennis Match Tracker 🎾
 A full-stack tennis match tracking system built for the Saint Leo University Men’s Tennis Team — designed to manage live scores, match scheduling, and real-time updates for players, coaches, and fans.
 
@@ -36,4 +40,8 @@ Saint-leo/
 
 Created by Eduardo Cohen,
 Senior Computer Science major & Captain of Saint Leo University Men’s Tennis Team.
+<<<<<<< HEAD
 Developed to bring real-time match tracking to collegiate tennis and demonstrate full-stack development expertise.
+=======
+Developed to bring real-time match tracking to collegiate tennis and demonstrate full-stack development expertise.
+>>>>>>> fc83d4c8118d68fbe3bf1c8db5cdf8d287941e51
