@@ -248,8 +248,8 @@ async function saveScoreLine(matchId, row) {
   };
 
   try {
-    const r = await fetch(`${API_BASE_URL}/scores`, {
-      method: "POST",
+    const r = await fetch(`${API_BASE_URL}/scores/${match_id}/${scores_id}`, {
+      method: "PUT",
       headers,
       body: JSON.stringify(payload),
     });

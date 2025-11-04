@@ -632,3 +632,297 @@
 
 /* admin niceties */
 .sl-empty{ color:#4f6475; padding:14px; border:1px dashed #e1ebe1; border-radius:12px; background:#fff; }
+/* overall card */
+.sl-card {
+  background: #fff;
+  border: 1px solid #e5e7eb; /* light gray */
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+}
+
+/* grid layout for doubles/singles lists */
+.ls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* header row inside each line card */
+.ls-line-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.ls-line-type {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* completed match card slight tint */
+.ls-line-final {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+}
+
+/* the block with players / sets / game */
+.ls-line-body {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: 12px;
+  row-gap: 12px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+/* player names left column */
+.ls-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* group inside .ls-side: name row + sub-label */
+.ls-names-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.ls-names {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #111827;
+  flex-wrap: wrap;
+}
+
+.ls-side-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.us-label {
+  color: #065f46; /* dark green vibe */
+}
+
+.opp-label {
+  color: #6b7280; /* gray */
+}
+
+/* serve dot */
+.serve-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.serve-team {
+  background-color: #065f46; /* green-ish for Lions serving */
+}
+.serve-opp {
+  background-color: #b91c1c; /* red-ish for opponent serving */
+}
+
+/* middle column: sets chips */
+.ls-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+  min-width: 80px;
+}
+
+.set-chip {
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 8px;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.set-chip-last {
+  background-color: #fff7ed;    /* light highlight */
+  border-color: #fdba74;        /* orange border */
+  color: #9a3412;               /* darker orange text */
+}
+
+.set-empty {
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/* right column: live game score */
+.ls-game {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.ls-game-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+
+.ls-game-val {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* status chip next to line type */
+.sl-chip {
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  font-weight: 500;
+  min-width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sl-chip-live {
+  background-color: #dcfce7;
+  border-color: #86efac;
+  color: #065f46;
+  font-weight: 600;
+}
+
+/* header scoreboard (big team score at top) */
+.ls-header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ls-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ls-kicker {
+  font-size: 12px;
+  font-weight: 500;
+  color: #065f46;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sl-live-dot {
+  color: #065f46;
+  font-size: 16px;
+  line-height: 0;
+}
+.ls-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+.ls-meta {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ls-right {
+  display: flex;
+  align-items: center;
+}
+.ls-scorebox {
+  text-align: center;
+  min-width: 90px;
+}
+.ls-score {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+.ls-score-sep {
+  font-size: 20px;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.1;
+}
+.ls-score-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+/* section headers "Doubles", "Singles" */
+.ls-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 2px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+/* ==== LiveScore two-row override ==== */
+.ls-line-body{ display:block !important; width:100%; }
+
+/* one row (team or opp) */
+.ls-row{
+  display:flex; justify-content:space-between; align-items:center;
+  gap:12px; padding:8px 12px; border-radius:8px;
+}
+.ls-row.win{  background:#ecfdf5; }   /* green tint */
+.ls-row.lose{ background:#fff1f2; }   /* red tint  */
+
+.ls-row-names{
+  display:flex; align-items:center; gap:8px;
+  min-width:0; flex:1;               /* let names take remaining space */
+}
+.ls-row-sets{
+  display:flex; gap:18px; font-weight:700;
+  white-space:nowrap;                 /* keep numbers on one line */
+}
+.ls-row-sets > div{ min-width:16px; text-align:right; }
+
+/* put "GAME 0–0" up in the header on the right */
+.ls-line-head{ display:flex; justify-content:space-between; align-items:center; }
+.ls-head-right{ display:flex; align-items:center; gap:12px; }
+.ls-head-game{ display:flex; align-items:center; gap:6px; }
+.ls-head-game .ls-game-val{ padding:2px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+
+/* --- force set numbers in one horizontal row --- */
+.ls-row-sets{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center;
+  gap:12px;
+  margin-left:auto;          /* pushes numbers to the far right */
+  white-space:nowrap;        /* prevents wrapping */
+}
+.ls-row-sets > div{
+  display:inline-block;
+  min-width:20px;
+  text-align:right;
+  line-height:1.2;
+}

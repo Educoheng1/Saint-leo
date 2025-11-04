@@ -1,49 +1,11 @@
-// src/pages/LiveScore.js
+// src/components/LiveScore.js
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "../styles.css";
 import API_BASE_URL from "../config";
 import { useAdmin } from "../AdminContext";
 
-
-export function ScoreInput(props) {
-  const initial =
-    props.value ??
-    props.currentGame ??
-    props.current_game ??
-    [0, 0];
-
-  const [a, b] = Array.isArray(initial) ? initial : [0, 0];
-  const vals = [0, 15, 30, 40];
-
-  const callChange = (next) => {
-    if (props.onChange) return props.onChange(next);
-    if (props.onChangeCurrentGame) return props.onChangeCurrentGame(next);
-    if (props.setValue) return props.setValue(next);
-    if (props.setCurrentGame) return props.setCurrentGame(next);
-  };
-
-  const setA = (v) => callChange([Number(v), b]);
-  const setB = (v) => callChange([a, Number(v)]);
-
-  return (
-    <div className="score-input">
-      {props.label && <div className="score-input-label">{props.label}</div>}
-      <div className="score-input-row">
-        <select disabled={props.disabled} value={a} onChange={(e) => setA(e.target.value)} aria-label="Team game points">
-          {vals.map((v) => (<option key={v} value={v}>{v}</option>))}
-        </select>
-        <span className="score-input-sep">–</span>
-        <select disabled={props.disabled} value={b} onChange={(e) => setB(e.target.value)} aria-label="Opponent game points">
-          {vals.map((v) => (<option key={v} value={v}>{v}</option>))}
-        </select>
-      </div>
-    </div>
-  );
-}
-
-
-/* ---------- Top Nav (same look/feel) ---------- */
+/* ---------- Small UI: top nav (keep if you already render a header elsewhere) ---------- */
 function TopNav({ name, hasLive }) {
   return (
     <header className="sl-topnav">
@@ -59,8 +21,11 @@ function TopNav({ name, hasLive }) {
         <Link to="/dashboard" className="sl-navlink">Dashboard</Link>
         <Link to="/players" className="sl-navlink">Roster</Link>
         <Link to="/schedule" className="sl-navlink">Schedule</Link>
-        {hasLive && <Link to="/livescore" className="sl-navlink sl-navlink-accent">Live Scores</Link>}
-        {!hasLive && <Link to="/livescore" className="sl-navlink">Scores</Link>}
+        {hasLive ? (
+          <Link to="/livescore" className="sl-navlink sl-navlink-accent">Live Scores</Link>
+        ) : (
+          <Link to="/livescore" className="sl-navlink">Scores</Link>
+        )}
         <Link to="/admin" className="sl-navlink">Admin Panel</Link>
       </nav>
 
@@ -76,6 +41,7 @@ function TopNav({ name, hasLive }) {
 
 /* ---------- utils ---------- */
 const TOKEN = localStorage.getItem("token") || "";
+
 async function fetchJSON(url) {
   try {
     const r = await fetch(url, {
@@ -90,23 +56,27 @@ async function fetchJSON(url) {
     return null;
   }
 }
+
 function looksLive(m) {
   const st = String(m?.status ?? "").toLowerCase();
   const started = Boolean(m?.started);
   return (st === "live" || st === "in_progress" || st === "in-progress" || started) && st !== "completed";
 }
+
 function parseDateSafe(s) {
   if (!s) return null;
   const clean = String(s).replace(" ", "T").replace(/\.\d+$/, "");
   const d = new Date(clean);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
 const fmtDate = (iso) => {
   const d = parseDateSafe(iso);
   return d
     ? d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : "TBD";
 };
+
 function useCountdown(iso) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -123,24 +93,57 @@ function useCountdown(iso) {
   return { d, h, m, s };
 }
 
-// set helpers
-const toSetsArray = (sets) => {
-  if (!Array.isArray(sets)) return [];
-  if (Array.isArray(sets[0])) return sets.map(p => ({ team: +(p[0] ?? 0), opp: +(p[1] ?? 0) }));
-  return sets.map(s => ({ team: +(s.team ?? 0), opp: +(s.opp ?? 0) }));
+/* ---------- set + label helpers for the pretty layout ---------- */
+// Normalize to objects {team, opp, super?}; accept arrays like [[6,3], ...] or objects
+const normalizeSets = (sets = [], N = 3) => {
+  const s = (sets || []).map((x) => {
+    if (Array.isArray(x)) return { team: Number(x[0] ?? 0), opp: Number(x[1] ?? 0) };
+    return {
+      team: Number(x.team ?? x.a ?? x.team_score ?? 0),
+      opp:  Number(x.opp  ?? x.b ?? x.opp_score  ?? 0),
+      super: !!x.super,
+    };
+  });
+  while (s.length < N) s.push({ team: 0, opp: 0 });
+  return s.slice(0, N);
 };
-const setsToChips = (sets) => toSetsArray(sets);
-const typeLabel = (s) => `${(s.match_type || "").toLowerCase() === "doubles" ? "Doubles" : "Singles"} ${s.line_no ?? ""}`.trim();
-const sideText = (s, opp=false) => {
-  const a1 = opp ? s.opponent1 : s.player1;
-  const a2 = opp ? s.opponent2 : s.player2;
-  if ((s.match_type || "").toLowerCase() === "doubles") return [a1, a2].filter(Boolean).join(" & ") || "TBD & TBD";
-  return a1 || "TBD";
+
+const setsWonByTeam = (sets) =>
+  sets.reduce((acc, s) => acc + ((s.team ?? 0) > (s.opp ?? 0) ? 1 : 0), 0);
+
+const typeLabel = (r) =>
+  (r?.match_type || r?.type || "").toLowerCase() === "doubles" ? "Doubles" : "Singles";
+
+// sideText(r, true) -> opponent names; sideText(r, false) -> Lions team
+const sideText = (r, isOpp) => {
+  const mt = (r?.match_type || r?.type || "").toLowerCase();
+  if (mt === "doubles") {
+    const a1 = isOpp ? r.opponent1 : r.player1;
+    const a2 = isOpp ? r.opponent2 : r.player2;
+    return [a1, a2].filter(Boolean).join(" & ") || "TBD & TBD";
+  }
+  return (isOpp ? r.opponent1 : r.player1) || "TBD";
 };
+
 const gameLabel = (cg) => {
   if (!Array.isArray(cg) || cg.length < 2) return "—";
-  return `${cg[0] ?? 0}–${cg[1] ?? 0}`; // your backend already sends 0/15/30/40
+  return `${cg[0] ?? 0}–${cg[1] ?? 0}`; // show tennis points 0/15/30/40
 };
+
+/* ---------- small UI atoms ---------- */
+function StatusChip({ status }) {
+  const st = String(status || "").toLowerCase();
+  if (st === "live") return <span className="sl-chip sl-chip-live">LIVE</span>;
+  if (st === "completed") return <span className="sl-chip">COMPLETED</span>;
+  if (st === "scheduled") return <span className="sl-chip">SCHEDULED</span>;
+  return <span className="sl-chip">{String(status || "STATUS").toUpperCase()}</span>;
+}
+
+function ServeDot({ side }) {
+  // side: "team" | "opp" | null
+  if (!side) return null;
+  return <span className={`serve-dot ${side === "team" ? "serve-team" : "serve-opp"}`} title={`${side} serving`} />;
+}
 
 /* ---------- data loaders ---------- */
 async function fetchLiveMatch() {
@@ -159,10 +162,12 @@ async function fetchLiveMatch() {
   }
   return null;
 }
+
 async function fetchScores(matchId) {
   const d = await fetchJSON(`${API_BASE_URL}/matches/${matchId}/scores`);
   return Array.isArray(d) ? d : [];
 }
+
 async function fetchUpcoming() {
   for (const u of [
     `${API_BASE_URL}/schedule/upcoming`,
@@ -181,21 +186,9 @@ async function fetchUpcoming() {
   return null;
 }
 
-/* ---------- small UI atoms ---------- */
-function StatusChip({ status }) {
-  const st = String(status || "").toLowerCase();
-  if (st === "live") return <span className="sl-chip sl-chip-live">LIVE</span>;
-  if (st === "completed") return <span className="sl-chip">COMPLETED</span>;
-  if (st === "scheduled") return <span className="sl-chip">SCHEDULED</span>;
-  return <span className="sl-chip">{String(status || "STATUS").toUpperCase()}</span>;
-}
-function ServeDot({ side }) {
-  // side: "team" | "opp" | null
-  if (!side) return null;
-  return <span className={`serve-dot ${side === "team" ? "serve-team" : "serve-opp"}`} title={`${side} serving`} />;
-}
-
-/* ---------- main component ---------- */
+/* =========================================================
+   LiveScore Component
+========================================================= */
 export default function LiveScore() {
   const { isAdmin } = useAdmin();
   const guestName = localStorage.getItem("guestName") || (isAdmin ? "Admin" : "Guest");
@@ -208,8 +201,8 @@ export default function LiveScore() {
   const hasLive = !!match;
 
   // Separate doubles and singles
-  const doubles = rows.filter((r) => r.match_type === "doubles");
-  const singles = rows.filter((r) => r.match_type === "singles");
+  const doubles = rows.filter((r) => (r.match_type || "").toLowerCase() === "doubles");
+  const singles = rows.filter((r) => (r.match_type || "").toLowerCase() === "singles");
 
   // Compute dual score (completed lines only)
   const dualScore = useMemo(() => {
@@ -300,37 +293,88 @@ export default function LiveScore() {
             <h2 className="ls-section-title">Doubles</h2>
             <div className="ls-grid">
               {doubles.map((r) => {
-                const sets = setsToChips(r.sets);
                 const serveSide = r.current_serve === 0 ? "team" : r.current_serve === 1 ? "opp" : null;
+
+                // Normalize sets & figure out winner tint
+                const setCols = normalizeSets(r.sets, 3);
+                const teamSets = setsWonByTeam(setCols);
+                const oppSets = setCols.filter((s) => (s.opp ?? 0) > (s.team ?? 0)).length;
+                const teamWins = teamSets > oppSets;
+                const oppWins  = oppSets  > teamSets;
+
                 return (
-                  <div key={r.id} className="ls-line sl-card">
-                    <div className="ls-line-head">
-                      <div className="ls-line-type">{typeLabel(r)}</div>
-                      <StatusChip status={r.status} />
-                    </div>
+                  <div key={r.id} className={`ls-line sl-card ${r.status === "completed" ? "ls-line-final" : ""}`}>
+                   <div className="ls-line-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  <div className="ls-line-type">{typeLabel(r)}</div>
+  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="ls-game" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="ls-game-label" style={{ fontSize: 12, textTransform: "uppercase", opacity: 0.6 }}>Game</div>
+      <div className="ls-game-val" style={{ fontSize: 14, padding: "2px 8px", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+        {gameLabel(r.current_game)}
+      </div>
+    </div>
+    <StatusChip status={r.status} />
+  </div>
+</div>
 
-                    <div className="ls-line-body">
-                      <div className="ls-side">
-                        <div className="ls-names">
+
+                    {/* Pretty body: two rows + right-aligned set columns + game */}
+                    <div className="ls-line-body" style={{ display: "block", width: "100%" }}>
+
+                      {/* TEAM (Lions) */}
+                      <div className={`ls-row ${teamWins ? "win" : ""}`}>
+                      <div className="ls-row-names">
+
                           <ServeDot side={serveSide === "team" ? "team" : null} />
-                          <span className="ls-team">{sideText(r, false)}</span>
+                          <div className="min-w-0">
+                          <div className="ls-team font-medium truncate">
+          {r.player1 && r.player2 ? `${r.player1} & ${r.player2}` : sideText(r, false)}
+        </div>
+                            <div className="ls-side-label us-label">Lions</div>
+                          </div>
                         </div>
-                        <div className="ls-names">
-                          <ServeDot side={serveSide === "opp" ? "opp" : null} />
-                          <span className="ls-opp">{sideText(r, true)}</span>
+                        <div
+  className="ls-row-sets"
+  style={{ alignSelf: "flex-end" }}
+>
+
+
+                          {setCols.map((s, i) => (
+                            <div key={i} className={(s.team ?? 0) > (s.opp ?? 0) ? "text-green-700" : "text-gray-900"}>
+                              {s.team ?? 0}
+                            </div>
+                          ))}
                         </div>
                       </div>
 
-                      <div className="ls-sets">
-                        {sets.length ? sets.map((s, i) => (
-                          <span key={i} className="set-chip">{s.team}–{s.opp}</span>
-                        )) : <span className="set-chip set-empty">—</span>}
+                      {/* OPP */}
+                      <div className={`ls-row mt-1 ${oppWins ? "lose" : ""}`}>
+                      <div className="ls-row-names">
+                      <ServeDot side={serveSide === "opp" ? "opp" : null} />
+                          <div className="min-w-0">
+                          <div className="ls-opp truncate">
+          {r.opponent1 && r.opponent2 ? `${r.opponent1} & ${r.opponent2}` : sideText(r, true)}
+        </div>
+                            <div className="ls-side-label opp-label">Opp</div>
+                            
+                          </div>
+                        </div>
+                        <div
+  className="ls-row-sets"
+  style={{ alignSelf: "flex-end" }}
+>
+
+
+                          {setCols.map((s, i) => (
+                            <div key={i} className={(s.opp ?? 0) > (s.team ?? 0) ? "text-red-600" : "text-black"}>
+                              {s.opp ?? 0}
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
-                      <div className="ls-game">
-                        <div className="ls-game-label">Game</div>
-                        <div className="ls-game-val">{gameLabel(r.current_game)}</div>
-                      </div>
+                      
+                      
                     </div>
                   </div>
                 );
@@ -346,39 +390,94 @@ export default function LiveScore() {
             <h2 className="ls-section-title">Singles</h2>
             <div className="ls-grid">
               {singles.map((r) => {
-                const sets = setsToChips(r.sets);
                 const serveSide = r.current_serve === 0 ? "team" : r.current_serve === 1 ? "opp" : null;
+
+                const setCols = normalizeSets(r.sets, 3);
+                const teamSets = setsWonByTeam(setCols);
+                const oppSets = setCols.filter((s) => (s.opp ?? 0) > (s.team ?? 0)).length;
+                const teamWins = teamSets > oppSets;
+                const oppWins  = oppSets  > teamSets;
+
                 return (
-                  <div key={r.id} className="ls-line sl-card">
-                    <div className="ls-line-head">
-                      <div className="ls-line-type">{typeLabel(r)}</div>
-                      <StatusChip status={r.status} />
+                  <div key={r.id} className={`ls-line sl-card ${r.status === "completed" ? "ls-line-final" : ""}`}>
+                    <div className="ls-line-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  <div className="ls-line-type">{typeLabel(r)}</div>
+  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="ls-game" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div className="ls-game-label" style={{ fontSize: 12, textTransform: "uppercase", opacity: 0.6 }}>Game</div>
+      <div className="ls-game-val" style={{ fontSize: 14, padding: "2px 8px", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+        {gameLabel(r.current_game)}
+      </div>
+    </div>
+    <StatusChip status={r.status} />
+  </div>
+</div>
+
+
+                    {/* Pretty body: two rows + right-aligned set columns + game */}
+                    <div className="ls-line-body" style={{ display: "block", width: "100%" }}>
+
+                      {/* TEAM (Lions) */}
+                      <div className={`ls-row ${teamWins ? "win" : ""}`}>
+    <div className="ls-row-names">
+      <ServeDot side={serveSide === "team" ? "team" : null} />
+      <div className="min-w-0">
+        <div className="ls-team font-medium truncate">
+          {/* singles: one Lion name */}
+          {r.player1 || r.teamA?.player_name || "Singles Player"}
+        </div>
+        <div className="ls-side-label us-label">Lions</div>
+      </div>
+    </div>
+    <div
+      className="text-lg font-semibold"
+      style={{ display: "flex", gap: 12, marginLeft: "auto", whiteSpace: "nowrap" }}
+    >
+      {setCols.map((s, i) => (
+        <div
+          key={i}
+          style={{ minWidth: 20, textAlign: "right" }}
+          className={(s.team ?? 0) > (s.opp ?? 0) ? "text-green-700" : "text-gray-900"}
+        >
+          {s.team ?? 0}
+        </div>
+      ))}
+    </div>
+  </div>
+
+                      {/* OPP */}
+                      <div className={`ls-row mt-1 ${oppWins ? "lose" : ""}`}>
+    <div className="ls-row-names">
+      <ServeDot side={serveSide === "opp" ? "opp" : null} />
+      <div className="min-w-0">
+        <div className="ls-opp truncate">
+          {/* singles: one Opp name */}
+          {r.opponent1 || r.teamB?.player_name || "Singles Opponent"}
+        </div>
+        <div className="ls-side-label opp-label">Opp</div>
+      </div>
+    </div>
+    <div
+      className="text-lg font-semibold"
+      style={{ display: "flex", gap: 12, marginLeft: "auto", whiteSpace: "nowrap" }}
+    >
+      {setCols.map((s, i) => (
+        <div
+          key={i}
+          style={{ minWidth: 20, textAlign: "right" }}
+          className={(s.opp ?? 0) > (s.team ?? 0) ? "text-red-600" : "text-black"}
+        >
+          {s.opp ?? 0}
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+
+                      
+                      
                     </div>
-
-                    <div className="ls-line-body">
-                      <div className="ls-side">
-                        <div className="ls-names">
-                          <ServeDot side={serveSide === "team" ? "team" : null} />
-                          <span className="ls-team">{sideText(r, false)}</span>
-                        </div>
-                        <div className="ls-names">
-                          <ServeDot side={serveSide === "opp" ? "opp" : null} />
-                          <span className="ls-opp">{sideText(r, true)}</span>
-                        </div>
-                      </div>
-
-                      <div className="ls-sets">
-                        {sets.length ? sets.map((s, i) => (
-                          <span key={i} className="set-chip">{s.team}–{s.opp}</span>
-                        )) : <span className="set-chip set-empty">—</span>}
-                      </div>
-
-                      <div className="ls-game">
-                        <div className="ls-game-label">Game</div>
-                        <div className="ls-game-val">{gameLabel(r.current_game)}</div>
-                      </div>
-                    </div>
-                  </div>
+                  
                 );
               })}
               {!singles.length && (
@@ -423,3 +522,4 @@ export default function LiveScore() {
     </>
   );
 }
+export const ScoreInput = () => null;

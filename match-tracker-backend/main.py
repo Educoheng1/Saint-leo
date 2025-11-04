@@ -17,7 +17,7 @@ from models import players, matches # SQLAlchemy tables
 from db_setup import  metadata # shared db + metadata
 from datetime import datetime
 from fastapi import Depends
-from sqlalchemy import select, insert, update, Column, String
+from sqlalchemy import select, insert, update, Column, String, and_
 from models import database, scores as scores_tbl,players, matches 
 
 # Setup SQLite database
@@ -304,6 +304,33 @@ async def list_schedule(status: Optional[str] = Query(None)):
     return data
 
 
+@app.get("/schedule/upcoming")
+async def get_upcoming_match():
+    rows = await database.fetch_all(matches.select())
+    upcoming: List[Dict] = []
+    now = datetime.utcnow()
+
+    for row in rows:
+        item = row_to_iso(row)
+        status = str(item.get("status") or "").lower()
+        if status == "completed":
+            continue
+        date_str = item.get("date")
+        if not date_str:
+            continue
+        try:
+            dt = datetime.fromisoformat(date_str)
+        except ValueError:
+            continue
+        if dt >= now:
+            upcoming.append((dt, item))
+
+    if not upcoming:
+        return None
+
+    upcoming.sort(key=lambda pair: pair[0])
+    return upcoming[0][1]
+
 @app.get("/schedule/{id}")
 async def get_schedule_by_id(id: int):
     query = matches.select().where(matches.c.id == id)
@@ -518,16 +545,50 @@ async def get_scores_by_id(scores_id: int):
         return _score_row_to_dict(row)
     raise HTTPException(status_code=404, detail="scores not found")
 
-@app.put("/scores/match/{match_id}")
-async def update_scores(match_id: int, scores_data: UpdateScore):
+
+@app.put("/scores/{match_id}/{scores_id}")
+async def update_scores(match_id: int, scores_id: int, scores_data: UpdateScore):
     values = {}
-    if "sets" in scores_data and scores_data["sets"] is not None:
-        values["sets"] = _coerce_sets(scores_data["sets"])
-    await database.execute(
-        update(scores_tbl).where(scores_tbl.c.id == match_id).values(**values)
+
+    # normalize and include fields only if provided
+    if scores_data.player1 is not None:       values["player1"] = scores_data.player1
+    if scores_data.player2 is not None:       values["player2"] = scores_data.player2
+    if scores_data.opponent1 is not None:     values["opponent1"] = scores_data.opponent1
+    if scores_data.opponent2 is not None:     values["opponent2"] = scores_data.opponent2
+    if scores_data.match_type is not None:    values["match_type"] = scores_data.match_type
+    if scores_data.status is not None:        values["status"] = scores_data.status
+    if scores_data.winner is not None:        values["winner"] = scores_data.winner
+    if scores_data.line_no is not None:       values["line_no"] = scores_data.line_no
+    if scores_data.current_game is not None:  values["current_game"] = _coerce_current_game(scores_data.current_game)
+    if scores_data.current_serve is not None: values["current_serve"] = _coerce_serve(scores_data.current_serve)
+    if scores_data.sets is not None:          values["sets"] = _coerce_sets(scores_data.sets)
+
+    if not values:
+        raise HTTPException(status_code=400, detail="No updatable fields provided")
+
+    stmt = (
+        update(scores_tbl)
+        .where(
+            scores_tbl.c.id == scores_id,
+            scores_tbl.c.match_id == match_id
+        )
+        .values(**values)
     )
-    updated_row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == match_id))
+    await database.execute(stmt)
+
+    row_query = (
+        select(scores_tbl)
+        .where(
+            scores_tbl.c.id == scores_id,
+            scores_tbl.c.match_id == match_id
+        )
+    )
+    updated_row = await database.fetch_one(row_query)
+    if not updated_row:
+        raise HTTPException(status_code=404, detail="Score row not found")
+
     return {"message": "Score updated successfully", "score": _score_row_to_dict(updated_row)}
+
 
 @app.delete("/scores/{scores_id}")
 async def delete_scores(scores_id: int):
@@ -600,29 +661,3 @@ async def get_events_for_match(match_id: int):
     return await _fetch_match_scores(match_id)
 
 
-@app.get("/schedule/upcoming")
-async def get_upcoming_match():
-    rows = await database.fetch_all(matches.select())
-    upcoming: List[Dict] = []
-    now = datetime.utcnow()
-
-    for row in rows:
-        item = row_to_iso(row)
-        status = str(item.get("status") or "").lower()
-        if status == "completed":
-            continue
-        date_str = item.get("date")
-        if not date_str:
-            continue
-        try:
-            dt = datetime.fromisoformat(date_str)
-        except ValueError:
-            continue
-        if dt >= now:
-            upcoming.append((dt, item))
-
-    if not upcoming:
-        return None
-
-    upcoming.sort(key=lambda pair: pair[0])
-    return upcoming[0][1]
