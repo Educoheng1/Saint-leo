@@ -4,13 +4,12 @@ from databases import Database
 from typing import Optional
 from pydantic import BaseModel
 from typing import List
-
-
+import sqlalchemy as sa
 DATABASE_URL = "sqlite:///./matches.db"
 
 database = Database(DATABASE_URL)
 engine = create_engine(DATABASE_URL)
-metadata = MetaData()
+metadata = sa.MetaData()
 
 
 matches = Table(
@@ -66,18 +65,20 @@ scores = Table(
     metadata,
     Column("id", Integer, primary_key=True),
     Column("match_id", Integer, ForeignKey("matches.id"), nullable=False),  # FK to matches table
+    Column("match_type", String, nullable=True),
+    Column("line_no", Integer, nullable=False, default=1),
+    Column("status", String, nullable=False, default="pending"),  # e.g., 'live', 'completed'
     Column("player1", String, nullable=True),
     Column("player2", String, nullable=True),
     Column("opponent1", String, nullable=True),  # Ensure this column exists
     Column("opponent2", String, nullable=True),
     Column("sets", JSON, nullable=True),       # JSON to store sets data
     Column("current_game", JSON, nullable=True),  # JSON to store current game score
-    Column("status", String, nullable=False, default="pending"),  # e.g., 'live', 'completed'
     Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
     Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
     Column("winner", String),
-    Column("line_no", Integer, nullable=False, default=1),
-    Column("match_type", String, nullable=True),
+    
+    
 )
 class UpdateScore(BaseModel):
     player1: Optional[str] = None
@@ -92,3 +93,13 @@ class UpdateScore(BaseModel):
     current_game: Optional[List[int]] = None
     started: Optional[bool] = None
     current_serve: Optional[str] = None
+
+    # models.py
+users = sa.Table(
+    "users",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("email", sa.String, nullable=False, unique=True, index=True),
+    sa.Column("password_hash", sa.String, nullable=False),
+    sa.Column("role", sa.String, nullable=False, server_default="user"),  # "admin" or "user"
+)

@@ -1,7 +1,16 @@
-from models import metadata, players
-import sqlalchemy
+import sqlalchemy as sa
+from sqlalchemy.orm import sessionmaker
+from models import metadata  # your Core metadata
 
-engine = sqlalchemy.create_engine("sqlite:///./test.db")  # match your DB URL
-metadata.drop_all(engine)
+DATABASE_URL = "sqlite:///./test.db"
+
+engine = sa.create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}  # needed for SQLite + threads
+)
+
+# Session factory for FastAPI Depends(get_db)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+# Create tables if they don't exist
 metadata.create_all(engine)
-print("Players table reset.")

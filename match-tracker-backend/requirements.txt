@@ -3,3 +3,5 @@ uvicorn[standard]
 sqlalchemy
 databases
 aiosqlite
+python-jose[cryptography]
+passlib[bcrypt]

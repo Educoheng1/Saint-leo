@@ -92,8 +92,233 @@ const looksLive = (m) => {
   const started = Boolean(m?.started);
   return (st==="live" || st==="in_progress" || st==="in-progress" || started) && st!=="completed";
 };
+function ensureSets(v) {
+  if (Array.isArray(v)) return v.map(s => [Number(s?.[0]||0), Number(s?.[1]||0)]);
+  if (typeof v === "string" && v.trim()) {
+    return v.split(",").map(p => p.trim().split("-").map(n => Number(n||0)));
+  }
+  return [[0,0]]; // default one empty set
+}
 
 /* ---------------- data loaders (players / schedule / live) ---------------- */
+function StatusPill({ status }) {
+  const s = String(status || "").toLowerCase();
+  const bg =
+    s === "completed" ? "#f0f9f0" :
+    s === "live" ? "#e9f7ef" :
+    "#f6f7fb";
+  const clr =
+    s === "completed" ? "#174d2a" :
+    s === "live" ? "#1f7a4c" :
+    "#485a6a";
+  return (
+    <span style={{
+      background:bg, color:clr, padding:"6px 10px",
+      borderRadius:999, fontWeight:700, fontSize:12, textTransform:"capitalize"
+    }}>
+      {s || "scheduled"}
+    </span>
+  );
+}
+
+function EditLineModal({ open, onClose, value, onChange, onSave }) {
+  const [winner, setWinner] = React.useState("unfinished"); // "team" | "opponent" | "unfinished"
+  React.useEffect(() => {
+    if (open) setWinner(value?.winner ?? "unfinished");
+  }, [open, value?.winner]);
+
+  if (!open) return null;
+  const r = value || {};
+  const isScheduled = String(r.status || "").toLowerCase() === "scheduled";
+  const isDoubles  = String(r.match_type || "").toLowerCase() === "doubles";
+  const isLive = String(r.status || "").toLowerCase() === "live";
+ 
+
+
+  const canStart = () => {
+    if (!r.player1 || !r.opponent1) return false;
+    if (isDoubles && (!r.player2 || !r.opponent2)) return false;
+    return true;
+  };
+
+  const handlePrimary = async () => {
+    if (isScheduled) {
+      if (!canStart()) {
+        alert(isDoubles
+          ? "Please enter player1, player2, opponent1, and opponent2."
+          : "Please enter player1 and opponent1.");
+        return;
+      }
+      const body = {
+        player1: r.player1,
+        opponent1: r.opponent1,
+        current_serve: Number(r.current_serve ?? 0),
+      };
+      if (isDoubles) {
+        body.player2   = r.player2;
+        body.opponent2 = r.opponent2;
+      }
+      const res = await startScoreLine(r.id, body);
+      if (res?.score) {
+        onChange(res.score); // refresh local draft with server copy
+        onClose();           // close modal; card will reflect LIVE state
+      }
+    } else {
+      await onSave(); // save scores via PUT /scores/{id}
+    }
+  };
+  async function handleComplete() {
+    const res = await completeScoreLine(r.id, winner);
+    if (res?.score) {
+      onChange(res.score);  // refresh row in UI
+      onClose();            // close modal
+    }
+  }
+  return (
+    <div style={{
+      position:"fixed", inset:0, background:"rgba(0,0,0,.25)",
+      display:"grid", placeItems:"center", zIndex:1000
+    }}>
+      <div className="sl-card" style={{ width:640, padding:16, background:"#fff" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <div style={{ fontWeight:800, color:"#174d2a" }}>
+            {isScheduled ? "Start Line" : "Edit Score"}
+          </div>
+          <button className="sl-logout" onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ display:"grid", gap:10 }}>
+          <Row>
+            <Field label="Type">
+              <select
+                value={r.match_type||"singles"}
+                onChange={(e)=>onChange({match_type:e.target.value})}
+                disabled={!isScheduled}  // lock after live
+              >
+                <option value="singles">Singles</option>
+                <option value="doubles">Doubles</option>
+              </select>
+            </Field>
+            <Field label="Line #">
+              <input
+                type="number" min="1"
+                value={r.line_no||1}
+                onChange={(e)=>onChange({line_no:Number(e.target.value)})}
+                disabled={!isScheduled}  // lock after live
+              />
+            </Field>
+          </Row>
+
+          <Row>
+            <Field label="Team Player(s)">
+              <input
+                value={isDoubles
+                  ? `${r.player1||""}${r.player2?` & ${r.player2}`:""}`
+                  : (r.player1||"")}
+                onChange={(e)=>{
+                  const txt = e.target.value;
+                  if (isDoubles && txt.includes("&")) {
+                    const [p1,p2] = txt.split("&").map(s=>s.trim());
+                    onChange({player1:p1, player2:p2});
+                  } else {
+                    onChange({player1:txt, player2: isDoubles ? (r.player2||"") : ""});
+                  }
+                }}
+                placeholder={isDoubles?"John & Jack":"John"}
+                disabled={!isScheduled} // lock after live
+              />
+            </Field>
+            <Field label="Opponent(s)">
+              <input
+                value={isDoubles
+                  ? `${r.opponent1||""}${r.opponent2?` & ${r.opponent2}`:""}`
+                  : (r.opponent1||"")}
+                onChange={(e)=>{
+                  const txt = e.target.value;
+                  if (isDoubles && txt.includes("&")) {
+                    const [o1,o2] = txt.split("&").map(s=>s.trim());
+                    onChange({opponent1:o1, opponent2:o2});
+                  } else {
+                    onChange({opponent1:txt, opponent2: isDoubles ? (r.opponent2||"") : ""});
+                  }
+                }}
+                placeholder={isDoubles?"Opp A & Opp B":"Opp A"}
+                disabled={!isScheduled} // lock after live
+              />
+            </Field>
+          </Row>
+
+          {/* Serve is allowed in both states */}
+          <Row>
+            <Field label="Serve">
+              <select
+                value={Number(r.current_serve ?? 0)}
+                onChange={(e)=>onChange({current_serve:Number(e.target.value)})}
+              >
+                <option value={0}>Team</option>
+                <option value={1}>Opponent</option>
+              </select>
+            </Field>
+            <Field label="Status">
+              <select
+                value={r.status || (isScheduled ? "scheduled" : "live")}
+                onChange={(e)=>onChange({status:e.target.value})}
+                disabled // control by backend actions
+              >
+                <option value="scheduled">Scheduled</option>
+                <option value="live">Live</option>
+                <option value="completed">Completed</option>
+              </select>
+            </Field>
+          </Row>
+
+          {/* Sets editor only when LIVE */}
+          {!isScheduled && (
+            <Row>
+              <Field label="Sets">
+                <SetsEditor
+                  value={r.sets ?? ensureSets(r.setsText)}
+                  onChange={(next)=>onChange({ sets: next, setsText: undefined })}
+                  labelLeft="Team"
+                  labelRight="Opp"
+                />
+              </Field>
+            </Row>
+          )}
+   {isLive && (
+          <Row>
+            <Field label="Complete line">
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <select
+                  value={winner}
+                  onChange={(e)=>setWinner(e.target.value)}
+                  className="sl-input"
+                  style={{ padding:"6px 10px" }}
+                >
+                  <option value="unfinished">Unfinished</option>
+                  <option value="team">Team Won</option>
+                  <option value="opponent">Opponent Won</option>
+                </select>
+                <button className="sl-logout" onClick={handleComplete}>
+                  Complete Line
+                </button>
+              </div>
+            </Field>
+          </Row>
+        )}
+          <div style={{ display:"flex", gap:8, marginTop:6 }}>
+            <button className="sl-view-btn" onClick={handlePrimary}>
+              {isScheduled ? "Start Line" : "Save Score"}
+            </button>
+            <button className="sl-logout" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 async function loadPlayers() {
   const d = await fetchJSON(`${API_BASE_URL}/players`) || await fetchJSON(`${API_BASE_URL}/roster`);
   if (!Array.isArray(d)) return [];
@@ -185,6 +410,17 @@ async function startMatch(id) {
     return false;
   }
 }
+function normalizeSets(sets = [], N = 3) {
+  const s = (sets || []).map(x => {
+    if (Array.isArray(x)) return { team: Number(x[0] ?? 0), opp: Number(x[1] ?? 0) };
+    return {
+      team: Number(x?.team ?? x?.a ?? x?.team_score ?? 0),
+      opp:  Number(x?.opp  ?? x?.b ?? x?.opp_score  ?? 0),
+    };
+  });
+  while (s.length < N) s.push({ team: 0, opp: 0 });
+  return s.slice(0, N);
+}
 async function endMatch(matchId) {
   // Ask the admin who won
   const winner = window.prompt(
@@ -229,26 +465,38 @@ async function endMatch(matchId) {
   }
 }
 
-
+async function startScoreLine(scoreId, body) {
+  try {
+    const r = await fetch(`${API_BASE_URL}/scores/${scoreId}/start`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return await r.json(); // { message, score }
+  } catch (err) {
+    console.error("startScoreLine error:", err);
+    alert("Error starting line: " + (err.message || "unknown"));
+    return null;
+  }
+}
 // Scores
 async function saveScoreLine(matchId, row) {
+  if (!row?.id) {
+    alert("Cannot save score: missing line id");
+    return null;
+  }
   const payload = {
-    match_id: matchId,
-    match_type: row.match_type,
-    line_no: row.line_no,
-    player1: row.player1,
-    player2: row.player2 || null,
-    opponent1: row.opponent1,
-    opponent2: row.opponent2 || null,
+    // send only scoring fields; backend coerces sets string or array
     sets: Array.isArray(row.sets) ? row.sets : stringToSets(row.setsText),
+    // keep these if you want them mutable while live:
     current_game: row.current_game || [0, 0],
-    current_serve: row.current_serve ?? 0,
     status: row.status || "live",
-    winner: row.winner || null,
+    current_serve: String(row.current_serve ?? 0),
+    winner: row.winner ?? null,
   };
-
   try {
-    const r = await fetch(`${API_BASE_URL}/scores/${match_id}/${scores_id}`, {
+    const r = await fetch(`${API_BASE_URL}/scores/${row.id}`, {
       method: "PUT",
       headers,
       body: JSON.stringify(payload),
@@ -260,6 +508,69 @@ async function saveScoreLine(matchId, row) {
     alert("Error saving line: " + err.message);
     return null;
   }
+}
+async function completeScoreLine(scoreId, winner /* "team" | "opponent" | "unfinished" */) {
+  try {
+    const r = await fetch(`${API_BASE_URL}/scores/${scoreId}/complete`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ winner }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return await r.json(); // { message, score }
+  } catch (err) {
+    console.error("completeScoreLine error:", err);
+    alert("Error completing line: " + (err.message || "unknown"));
+    return null;
+  }
+}
+
+function NumStepper({ value, onChange, min=0, max=99, ariaLabel }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+      <button className="sl-logout" onClick={() => onChange(Math.max(min, value-1))} aria-label={`${ariaLabel} minus`}>−</button>
+      <div style={{ minWidth:28, textAlign:"center", fontWeight:700 }}>{value}</div>
+      <button className="sl-view-btn" onClick={() => onChange(Math.min(max, value+1))} aria-label={`${ariaLabel} plus`}>+</button>
+    </div>
+  );
+}
+
+/**
+ * value can be:
+ *   [team, opp]  -> normal game (any integers)
+ *   {mode:'tiebreak', score:[team, opp]} -> tiebreak (also integers)
+ * We render the same numeric steppers for both; the shape is preserved.
+ */
+function GameEditor({ value, onChange, isTB=false }) {
+  const score = isTB
+    ? (value?.score ?? [0,0])
+    : (Array.isArray(value) ? value : [0,0]);
+
+  const setSide = (side, v) => {
+    const nv = Math.max(0, Math.min(99, v));
+    if (isTB) {
+      const next = { mode:'tiebreak', score:[...score] };
+      next.score[side] = nv;
+      onChange(next);
+    } else {
+      const next = [...score];
+      next[side] = nv;
+      onChange(next);
+    }
+  };
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      <div style={{ border:"1px solid #e6eef0", borderRadius:10, padding:8 }}>
+        <div style={{ marginBottom:6, color:"#52707e" }}>Team</div>
+        <NumStepper value={score[0]} onChange={(v)=>setSide(0,v)} ariaLabel="Team points" />
+      </div>
+      <div style={{ border:"1px solid #e6eef0", borderRadius:10, padding:8 }}>
+        <div style={{ marginBottom:6, color:"#52707e" }}>Opp</div>
+        <NumStepper value={score[1]} onChange={(v)=>setSide(1,v)} ariaLabel="Opponent points" />
+      </div>
+    </div>
+  );
 }
 
 async function deleteScoreLine(matchId, id) {
@@ -278,6 +589,149 @@ function Field({ label, children }) {
 }
 function Row({ children }) {
   return <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(180px,1fr))", gap:10 }}>{children}</div>;
+}
+function AdminLineCard({ line, onEdit }) {
+  // compute set totals to show big numbers like your card
+  const rawSets = Array.isArray(line.sets) ? line.sets : stringToSets(line.setsText);
+  // normalize to [a,b] pairs even if backend sent objects like {team, opp}
+  const sets = rawSets
+    .map(s => Array.isArray(s) ? s : [Number(s?.team ?? s?.home ?? 0), Number(s?.opp ?? s?.away ?? 0)])
+    .filter(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n)));
+  const teamSetsWon = sets.filter(p => (p[0] ?? 0) > (p[1] ?? 0)).length;
+const oppSetsWon  = sets.filter(p => (p[1] ?? 0) > (p[0] ?? 0)).length;
+  const cg = Array.isArray(line.current_game) ? line.current_game : [0, 0];
+  const [cgA = 0, cgB = 0] = cg;
+  
+  const setsArr = Array.isArray(line.sets) ? line.sets : [];
+  // If you store sets as text, normalize first:
+  const setsFromText = typeof line.setsText === 'string'
+    ? line.setsText.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+  const teamNames = (line.match_type==="doubles")
+    ? `${line.player1||"Player 1"}\n${line.player2||"Player 2"}`
+    : `${line.player1||"Player"}`;
+
+  const oppNames = (line.match_type==="doubles")
+    ? `${line.opponent1||"Opp 1"}\n${line.opponent2||"Opp 2"}`
+    : `${line.opponent1||"Opponent"}`;
+
+  return (
+    <div className="sl-card" style={{ padding:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+        <div style={{ fontWeight:800, color:"#174d2a" }}>
+          {`Court ${line.line_no || 1} – ${line.match_type==="doubles" ? "Doubles" : "Singles"}`}
+        </div>
+        <StatusPill status={line.status} />
+      </div>
+
+      {(() => {
+  const setCols = normalizeSets(line.sets, 3);
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr repeat(3, auto)",
+        gap: 12,
+        alignItems: "center",
+      }}
+    >
+      {/* team names */}
+      <div
+        style={{
+          whiteSpace: "pre-line",
+          padding: "10px 12px",
+          background: "#f7fff9",
+          borderRadius: 12,
+          border: "1px solid #e6f2e7",
+          fontWeight: 700,
+          color: "#1f3b2b",
+        }}
+      >
+        {teamNames}
+      </div>
+      {setCols.map((s, i) => (
+        <div key={`t${i}`} style={{ fontSize: 24, fontWeight: 800, textAlign: "center" }}>
+          {s.team}
+        </div>
+      ))}
+
+      {/* opponent row */}
+      <div style={{ color: "#4f6475", whiteSpace: "pre-line" }}>{oppNames}</div>
+      {setCols.map((s, i) => (
+        <div key={`o${i}`} style={{ fontSize: 24, fontWeight: 800, textAlign: "center" }}>
+          {s.opp}
+        </div>
+      ))}
+    </div>
+  );
+})()}
+
+
+      <div style={{ marginTop:12 }}>
+        <button className="sl-navlink" onClick={onEdit}>
+          Edit Match
+        </button>
+      </div>
+    </div>
+  );
+}
+function Stepper({ value, onChange, min=0, max=99, ariaLabel }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+      <button className="sl-logout" onClick={() => onChange(Math.max(min, value-1))} aria-label={`${ariaLabel} minus`}>−</button>
+      <div style={{ minWidth:24, textAlign:"center", fontWeight:700 }}>{value}</div>
+      <button className="sl-view-btn" onClick={() => onChange(Math.min(max, value+1))} aria-label={`${ariaLabel} plus`}>+</button>
+    </div>
+  );
+}
+
+function SetsEditor({ value, onChange, labelLeft="Team", labelRight="Opp" }) {
+  const sets = ensureSets(value);
+
+  const updateSet = (idx, side, val) => {
+    const next = sets.map((s,i)=> i===idx ? [side===0?val:s[0], side===1?val:s[1]] : s);
+    onChange(next);
+  };
+
+  const addSet = () => onChange([...sets, [0,0]]);
+  const removeSet = () => onChange(sets.length>1 ? sets.slice(0,-1) : [[0,0]]);
+
+  return (
+    <div style={{ display:"grid", gap:10 }}>
+      {sets.map((s, idx) => (
+        <div key={idx} style={{
+          display:"grid",
+          gridTemplateColumns:"1fr auto 1fr",
+          alignItems:"center",
+          gap:12,
+          padding:"8px 10px",
+          border:"1px solid #e6eef0",
+          borderRadius:10
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ color:"#52707e" }}>{labelLeft}</span>
+            <Stepper
+              value={s[0]} ariaLabel={`Set ${idx+1} ${labelLeft}`}
+              onChange={(v)=>updateSet(idx, 0, v)}
+            />
+          </div>
+          <div style={{ textAlign:"center", color:"#78909C", fontWeight:700 }}>Set {idx+1}</div>
+          <div style={{ display:"flex", justifyContent:"end", alignItems:"center", gap:8 }}>
+            <span style={{ color:"#52707e" }}>{labelRight}</span>
+            <Stepper
+              value={s[1]} ariaLabel={`Set ${idx+1} ${labelRight}`}
+              onChange={(v)=>updateSet(idx, 1, v)}
+            />
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display:"flex", gap:8 }}>
+        <button className="sl-navlink" onClick={addSet}>Add Set</button>
+        <button className="sl-logout" onClick={removeSet}>Remove Set</button>
+      </div>
+    </div>
+  );
 }
 
 /* ---------------- Admin Panel ---------------- */
@@ -302,6 +756,31 @@ export default function Admin() {
   // live
   const [liveMatch, setLiveMatch] = useState(null);
   const [lines, setLines] = useState([]);
+  // add to Admin() component state:
+const [editingIdx, setEditingIdx] = useState(null);
+const [draftLine, setDraftLine] = useState(null);
+// helper to open/close
+const openEdit = (idx) => {
+  const src = lines[idx];
+  setEditingIdx(idx);
+  setDraftLine({
+    ...src,
+    sets: ensureSets(src.sets ?? src.setsText),
+  });
+};
+const isSixSix = (sets=[]) => {
+  const last = (Array.isArray(sets) && sets.length) ? sets[sets.length-1] : [0,0];
+  return Number(last?.[0]) === 6 && Number(last?.[1]) === 6;
+};
+
+
+const closeEdit = () => { setEditingIdx(null); setDraftLine(null); };
+const commitEdit = async () => {
+  const payload = { ...draftLine, sets: ensureSets(draftLine.sets) };
+  const res = await saveScoreLine(liveMatch.id, payload);
+  if (res) { setLines(await loadScores(liveMatch.id)); closeEdit(); }
+  else alert("Failed to save line");
+};
 
   /* ----- boot ----- */
   useEffect(() => {
@@ -530,108 +1009,31 @@ export default function Admin() {
 
             {/* lines editor */}
             {liveMatch ? (
-              <div className="sl-card" style={{ padding:14 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                  <div style={{ fontWeight:700, color:"#174d2a" }}>Score Lines</div>
-                  <button className="sl-navlink" onClick={addLine}>Add Line</button>
-                </div>
+  <div className="sl-card" style={{ padding:14 }}>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+      <div style={{ fontWeight:700, color:"#174d2a" }}>Score Lines</div>
+      <button className="sl-navlink" onClick={addLine}>Add Line</button>
+    </div>
 
-                <div style={{ display:"grid", gap:10 }}>
-                  {lines.map((r, idx) => (
-                    <div key={r.id || `new-${idx}`} className="sl-card" style={{ padding:12 }}>
-                      <div style={{ display:"grid", gap:10 }}>
-                        <Row>
-                          <Field label="Type">
-                            <select value={r.match_type||"singles"} onChange={(e)=>updateLine(idx,{match_type:e.target.value})}>
-                              <option value="singles">Singles</option>
-                              <option value="doubles">Doubles</option>
-                            </select>
-                          </Field>
-                          <Field label="Line #">
-                            <input type="number" min="1" value={r.line_no||1} onChange={(e)=>updateLine(idx,{line_no:Number(e.target.value)})} />
-                          </Field>
-                        </Row>
+    <div style={{ display:"grid", gap:12 }}>
+      {lines.map((r, idx) => (
+        <AdminLineCard key={r.id || `new-${idx}`} line={r} onEdit={() => openEdit(idx)} />
+      ))}
+      {!lines.length && <div style={{ color:"#4f6475" }}>No lines yet — add one above.</div>}
+    </div>
 
-                        <Row>
-                          <Field label="Team Player(s)">
-                            <input value={r.match_type==="doubles"
-                                      ? (r.player1||"") + (r.player2?` & ${r.player2}`:"")
-                                      : (r.player1||"")}
-                                   onChange={(e)=>{
-                                     const txt = e.target.value;
-                                     if ((r.match_type||"").toLowerCase()==="doubles" && txt.includes("&")) {
-                                       const [p1,p2] = txt.split("&").map(s=>s.trim());
-                                       updateLine(idx,{player1:p1, player2:p2});
-                                     } else {
-                                       updateLine(idx,{player1:txt, player2: r.match_type==="doubles" ? (r.player2||"") : ""});
-                                     }
-                                   }} placeholder={r.match_type==="doubles"?"John & Jack":"John"} />
-                          </Field>
-                          <Field label="Opponent(s)">
-                            <input value={r.match_type==="doubles"
-                                      ? (r.opponent1||"") + (r.opponent2?` & ${r.opponent2}`:"")
-                                      : (r.opponent1||"")}
-                                   onChange={(e)=>{
-                                     const txt = e.target.value;
-                                     if ((r.match_type||"").toLowerCase()==="doubles" && txt.includes("&")) {
-                                       const [o1,o2] = txt.split("&").map(s=>s.trim());
-                                       updateLine(idx,{opponent1:o1, opponent2:o2});
-                                     } else {
-                                       updateLine(idx,{opponent1:txt, opponent2: r.match_type==="doubles" ? (r.opponent2||"") : ""});
-                                     }
-                                   }} placeholder={r.match_type==="doubles"?"Opp A & Opp B":"Opp A"} />
-                          </Field>
-                        </Row>
+    <EditLineModal
+      open={editingIdx !== null}
+      value={draftLine || {}}
+      onClose={closeEdit}
+      onChange={(patch)=>setDraftLine(prev=>({ ...prev, ...patch }))}
+      onSave={commitEdit}
+    />
+  </div>
+) : (
+  <div className="sl-card sl-empty">No live match active. Start one from the selector above.</div>
+)}
 
-                        <Row>
-                          <Field label="Sets (e.g., 6-4, 4-6, 7-5)">
-                            <input value={r.setsText ?? setsToString(r.sets)} onChange={(e)=>updateLine(idx,{setsText:e.target.value})} />
-                          </Field>
-                          <Field label="Current Game">
-                            <ScoreInput value={r.current_game || [0,0]} onChange={(val)=>updateLine(idx,{current_game:val})} />
-                          </Field>
-                        </Row>
-
-                        <Row>
-                          <Field label="Serve">
-                            <select value={Number(r.current_serve ?? 0)} onChange={(e)=>updateLine(idx,{current_serve:Number(e.target.value)})}>
-                              <option value={0}>Team</option>
-                              <option value={1}>Opponent</option>
-                            </select>
-                          </Field>
-                          <Field label="Status">
-                            <select value={r.status || "live"} onChange={(e)=>updateLine(idx,{status:e.target.value})}>
-                              <option value="live">Live</option>
-                              <option value="completed">Completed</option>
-                              <option value="pending">Pending</option>
-                            </select>
-                          </Field>
-                        </Row>
-
-                        <Row>
-                          <Field label="Winner (dual point)">
-                            <select value={r.winner ?? ""} onChange={(e)=>updateLine(idx,{winner:e.target.value || null})}>
-                              <option value="">—</option>
-                              <option value="team">Team</option>
-                              <option value="opponent">Opponent</option>
-                            </select>
-                          </Field>
-                          <div />
-                        </Row>
-
-                        <div style={{ display:"flex", gap:8 }}>
-                          <button className="sl-view-btn" onClick={()=>saveLine(idx)}>Save Line</button>
-                          <button className="sl-logout" onClick={()=>removeLine(idx)} style={{ borderColor:"#f3c1c1" }}>Delete Line</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {!lines.length && <div style={{ color:"#4f6475" }}>No lines yet — add one above.</div>}
-                </div>
-              </div>
-            ) : (
-              <div className="sl-card sl-empty">No live match active. Start one from the selector above.</div>
-            )}
           </>
         )}
 

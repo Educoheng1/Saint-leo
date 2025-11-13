@@ -1,35 +1,45 @@
-from fastapi import FastAPI, HTTPException, Request
+# Stdlib
 import json
-from sqlalchemy.sql import func  # Add this import
 import re
-from typing import Optional, List
-from fastapi import Query, HTTPException
-from datetime import datetime
-from typing import Dict, List, Literal, Optional
-from sqlalchemy import create_engine, delete, insert, select, update
-from db_setup import metadata  # shared db + metadata
-from fastapi import FastAPI, HTTPException, Query
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Literal
+
+# FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Request, status, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Dict, Optional, Literal
-from sqlalchemy import create_engine
-from models import players, matches # SQLAlchemy tables
-from db_setup import  metadata # shared db + metadata
-from datetime import datetime
-from fastapi import Depends
-from sqlalchemy import select, insert, update, Column, String, and_
-from models import database, scores as scores_tbl,players, matches 
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+# Pydantic
+from pydantic import BaseModel, Field, validator
+
+# SQLAlchemy
+import sqlalchemy as sa
+from sqlalchemy import create_engine, delete, insert, select, update, Column, String, and_
+from sqlalchemy.sql import func
+from sqlalchemy.orm import sessionmaker
+
+# JWT / password hashing
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+
+# App modules
+from db_setup import engine, SessionLocal, metadata  # shared engine/session/metadata
+from models import players, matches, database, scores as scores_tbl, users
 
 # Setup SQLite database
 DATABASE_URL = "sqlite:///./matches.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 # Create tables
-metadata.create_all(engine)
-
-# Initialize FastAPI
 app = FastAPI()
+metadata.create_all(bind=engine)
 
+
+
+SECRET_KEY = "change-me"
+ALGO = "HS256"
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,6 +67,55 @@ async def root():
     return {"message": "Match Tracker API is running!"}
 
 
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def create_access_token(sub: int, role: str, hours: int = 12):
+    payload = {"sub": sub, "role": role, "exp": datetime.utcnow() + timedelta(hours=hours)}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGO)
+
+def get_current_user(token: str = Depends(oauth2), db=Depends(get_db)):
+    cred_exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGO])
+        uid = payload.get("sub"); role = payload.get("role")
+        if uid is None or role is None:
+            raise cred_exc
+    except JWTError:
+        raise cred_exc
+
+    row = db.execute(sa.select(users).where(users.c.id == uid)).mappings().first()
+    if not row:
+        raise cred_exc
+    return row  # dict-like mapping with keys id, email, role, etc.
+
+def admin_required(current_user = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+@app.post("/auth/login")
+def login(form: OAuth2PasswordRequestForm = Depends(), db=Depends(get_db)):
+    row = db.execute(sa.select(users).where(users.c.email == form.username)).mappings().first()
+    if not row or not pwd.verify(form.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Bad credentials")
+    token = create_access_token(sub=row["id"], role=row["role"])
+    return {"access_token": token, "token_type": "bearer", "user": {"id": row["id"], "email": row["email"], "role": row["role"]}}
+
+@app.get("/auth/me")
+def me(user = Depends(get_current_user)):
+    return {"id": user["id"], "email": user["email"], "role": user["role"]}
+
+# Example: admin-only endpoint
+@app.post("/admin/players")
+def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_db)):
+    # ...perform insert/update using Core...
+    return {"ok": True, "by": user["email"]}
 class Match(BaseModel):
     date: str  # or datetime if you use from datetime import datetime
     gender: str
@@ -116,6 +175,32 @@ class UpdateScore(BaseModel):
     current_game: Optional[List[int]] = None
     started: Optional[bool] = None
     current_serve: Optional[str] = None
+class CompleteScorePayload(BaseModel):
+    winner: Literal["team", "opponent", "unfinished"]
+
+# ----- helper (consistent with your _coerce_* style) -----
+def _coerce_winner(w: Optional[str]):
+    if w is None:
+        return None
+    s = str(w).strip().lower()
+    if s in ("team", "home", "0"):
+        return 0
+    if s in ("opponent", "away", "1"):
+        return 1
+    if s in ("unfinished", "", "none", "null"):
+        return None
+    raise HTTPException(status_code=422, detail="winner must be 'team', 'opponent', or 'unfinished'")
+
+class StartScorePayload(BaseModel):
+    player1: str = Field(..., min_length=1)
+    opponent1: str = Field(..., min_length=1)
+    player2: Optional[str] = None      # required for doubles; ignored for singles
+    opponent2: Optional[str] = None    # required for doubles; ignored for singles
+    current_serve: Optional[int] = 0   # 0=home,1=away (tweak if you use different)
+
+    @validator("player1", "opponent1", pre=True)
+    def strip_basic(cls, v):
+        return v.strip() if isinstance(v, str) else v
 
 class MatchIn(BaseModel):
     id: int
@@ -367,7 +452,7 @@ async def start_match(match_id: int):
                 "opponent2": f"Doubles Opponent {i}B",
                 "sets": [],  # Empty sets to start
                 "current_game": [0, 0],
-                "status": "live",
+                "status": "Scheduled",
                 "started": 1,
                 "current_serve": 0,
                 "winner": None,
@@ -385,7 +470,7 @@ async def start_match(match_id: int):
                 "opponent2": None,
                 "sets": [],  # Empty sets to start
                 "current_game": [0, 0],
-                "status": "live",
+                "status": "Scheduled",
                 "started": 1,
                 "current_serve": 0,
                 "winner": None,
@@ -472,72 +557,77 @@ async def delete_player(player_id: int):
 def get_livescore():
     return live_scores
 
-
-
-
-@app.post("/scores/{match_id}")
-async def start_scores(match_id: int, scores_data: dict):
-    # check if exists (one row per match)
-    existing = await database.fetch_one(
-        select(scores_tbl).where(scores_tbl.c.match_id == match_id)
+@app.post("/scores/{score_id}/start")
+async def start_score(score_id: int, body: StartScorePayload):
+    # fetch the row
+    row = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == score_id)
     )
-    if existing:
-        return {
-            "id": existing["id"],
-            "message": "Scores already exists",
-            "scores": _score_row_to_dict(existing),
-        }
+    if not row:
+        raise HTTPException(status_code=404, detail="Score row not found")
 
-    # normalize types: started -> 0/1, current_serve -> 0/1
-    started_val = int(bool(scores_data.get("started", 0)))
-    serve_val = _coerce_serve(scores_data.get("current_serve"))
-    line_no = scores_data.get("line_no")
-    try:
-        line_no = int(line_no)
-    except (TypeError, ValueError):
-        line_no = 1
+    match_type = row["match_type"]  # "doubles" | "singles"
+    if row["status"] in ("finished", "cancelled"):
+        raise HTTPException(status_code=409, detail=f"Cannot start a {row['status']} score")
 
-    q = insert(scores_tbl).values(
-        match_id=match_id,
-        line_no=line_no,
-        match_type=scores_data.get("match_type"),
-        player1=scores_data.get("player1"),
-        player2=scores_data.get("player2"),
-        opponent1=scores_data.get("opponent1"),
-        opponent2=scores_data.get("opponent2"),
-        sets=_coerce_sets(scores_data.get("sets") or [[0, 0]]),
-        current_game=_coerce_current_game(scores_data.get("current_game")),
-        status=scores_data.get("status", "pending"),
-        started=started_val,
-        current_serve=serve_val,
-        winner=scores_data.get("winner"),
+    # require partner/opponent2 for doubles
+    if match_type == "doubles":
+        if not body.player2 or not body.opponent2:
+            raise HTTPException(
+                status_code=422,
+                detail="player2 and opponent2 are required for doubles"
+            )
+    else:
+        # ensure singles stays null
+        body.player2 = None
+        body.opponent2 = None
+
+    # build updates: set names + start flags (leave sets/current_game as-is)
+    updates = {
+        "player1": body.player1,
+        "opponent1": body.opponent1,
+        "player2": body.player2,
+        "opponent2": body.opponent2,
+        "current_serve": body.current_serve if body.current_serve is not None else row["current_serve"],
+        "status": "live",   # align with your matches.status
+        "started": 1,
+    }
+
+    await database.execute(
+        update(scores_tbl).where(scores_tbl.c.id == score_id).values(**updates)
     )
-    new_id = await database.execute(q)
-    row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == new_id))
-    return {"id": new_id, "message": "Scorebox created", "scores": _score_row_to_dict(row)}
 
-@app.post("/scores")
-async def create_scores(scores_data: dict):
-    sets = _coerce_sets(scores_data.get("sets"))
-    q = insert(scores_tbl).values(
-        match_id=scores_data["match_id"],
-        line_no=scores_data.get("line_no"),
-        match_type=scores_data.get("match_type"),
-        player1=scores_data.get("player1"),
-        player2=scores_data.get("player2"),
-        opponent1=scores_data.get("opponent1"),
-        opponent2=scores_data.get("opponent2"),
-        sets=sets,  # Normalize sets
-        current_game=_coerce_current_game(scores_data.get("current_game")),
-        status=scores_data.get("status", "live"),
-        started=int(bool(scores_data.get("started", 0))),
-        current_serve=_coerce_serve(scores_data.get("current_serve")),
-        winner=scores_data.get("winner"),
+    updated = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == score_id)
     )
-    new_id = await database.execute(q)
-    row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == new_id))
-    return {"id": new_id, "message": "scores created", "scores": _score_row_to_dict(row)}
+    return {
+        "message": "Score started",
+        "score": _score_row_to_dict(updated),
+    }
+@app.post("/scores/{score_id}/complete")
+async def complete_score(score_id: int, body: CompleteScorePayload):
+    row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Score row not found")
 
+    winner_val = _coerce_winner(body.winner)
+
+    # Optional guard: block completing already completed/cancelled rows
+    if str(row["status"]).lower() in ("completed", "cancelled"):
+        # You can switch to 200 idempotent if you prefer
+        raise HTTPException(status_code=409, detail=f"Cannot complete a {row['status']} score")
+
+    await database.execute(
+        update(scores_tbl)
+        .where(scores_tbl.c.id == score_id)
+        .values(status="completed", winner=winner_val)
+    )
+
+    updated = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
+    return {
+        "message": "Score completed",
+        "score": _score_row_to_dict(updated),
+    }
 @app.get("/scores/{scores_id}")
 async def get_scores_by_id(scores_id: int):
     row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == scores_id))
@@ -546,49 +636,52 @@ async def get_scores_by_id(scores_id: int):
     raise HTTPException(status_code=404, detail="scores not found")
 
 
-@app.put("/scores/{match_id}/{scores_id}")
-async def update_scores(match_id: int, scores_id: int, scores_data: UpdateScore):
+@app.put("/scores/{scores_id}")
+async def update_scores(scores_id: int, scores_data: UpdateScore):
+    # build the fields we actually want to update
     values = {}
 
-    # normalize and include fields only if provided
-    if scores_data.player1 is not None:       values["player1"] = scores_data.player1
-    if scores_data.player2 is not None:       values["player2"] = scores_data.player2
-    if scores_data.opponent1 is not None:     values["opponent1"] = scores_data.opponent1
-    if scores_data.opponent2 is not None:     values["opponent2"] = scores_data.opponent2
-    if scores_data.match_type is not None:    values["match_type"] = scores_data.match_type
-    if scores_data.status is not None:        values["status"] = scores_data.status
-    if scores_data.winner is not None:        values["winner"] = scores_data.winner
-    if scores_data.line_no is not None:       values["line_no"] = scores_data.line_no
-    if scores_data.current_game is not None:  values["current_game"] = _coerce_current_game(scores_data.current_game)
-    if scores_data.current_serve is not None: values["current_serve"] = _coerce_serve(scores_data.current_serve)
-    if scores_data.sets is not None:          values["sets"] = _coerce_sets(scores_data.sets)
+    if scores_data.sets is not None:
+        # normalize before saving if needed
+        values["sets"] = _coerce_sets(scores_data.sets)
 
+    # prevent empty UPDATE (this is what causes "near WHERE": syntax error)
     if not values:
         raise HTTPException(status_code=400, detail="No updatable fields provided")
 
+    # run the UPDATE on the correct row
     stmt = (
         update(scores_tbl)
         .where(
-            scores_tbl.c.id == scores_id,
-            scores_tbl.c.match_id == match_id
+            and_(
+                scores_tbl.c.id == scores_id,
+            )
         )
         .values(**values)
     )
+
     await database.execute(stmt)
 
+    # now fetch the updated row to return it
     row_query = (
         select(scores_tbl)
         .where(
-            scores_tbl.c.id == scores_id,
-            scores_tbl.c.match_id == match_id
+            and_(
+                scores_tbl.c.id == scores_id,
+            )
         )
     )
+
     updated_row = await database.fetch_one(row_query)
+
     if not updated_row:
+        # means that line (scores_id) doesn't belong to that match_id
         raise HTTPException(status_code=404, detail="Score row not found")
 
-    return {"message": "Score updated successfully", "score": _score_row_to_dict(updated_row)}
-
+    return {
+        "message": "Score updated successfully",
+        "score": _score_row_to_dict(updated_row),
+    }
 
 @app.delete("/scores/{scores_id}")
 async def delete_scores(scores_id: int):

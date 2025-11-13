@@ -94,6 +94,7 @@ function useCountdown(iso) {
 }
 
 /* ---------- set + label helpers for the pretty layout ---------- */
+
 // Normalize to objects {team, opp, super?}; accept arrays like [[6,3], ...] or objects
 const normalizeSets = (sets = [], N = 3) => {
   const s = (sets || []).map((x) => {
@@ -189,7 +190,8 @@ async function fetchUpcoming() {
 /* =========================================================
    LiveScore Component
 ========================================================= */
-export default function LiveScore() {
+export default function LiveScore(props) {
+
   const { isAdmin } = useAdmin();
   const guestName = localStorage.getItem("guestName") || (isAdmin ? "Admin" : "Guest");
 
@@ -205,15 +207,27 @@ export default function LiveScore() {
   const singles = rows.filter((r) => (r.match_type || "").toLowerCase() === "singles");
 
   // Compute dual score (completed lines only)
-  const dualScore = useMemo(() => {
-    let team = 0, opp = 0;
+  const dualScore = React.useMemo(() => {
+    let teamUnits = 0, oppUnits = 0;
+
     for (const r of rows) {
-      const w = String(r?.winner || "").toLowerCase();
-      if (w === "team") team++;
-      else if (w === "opponent") opp++;
+      const status = String(r?.status ?? "").toLowerCase();
+      if (status !== "completed") continue; // only finished lines count
+
+      const type = String(r?.match_type ?? r?.type ?? "").toLowerCase();
+      const units = type === "doubles" ? 1 : 2; // 0.5 vs 1 point (in units)
+
+      // map your winner field
+      const winner = String(r?.winner ?? "").toLowerCase();
+      if (winner === "team") teamUnits += units;
+      else if (winner === "opponent") oppUnits += units;
     }
-    return { team, opp };
-  }, [rows]);
+
+    return {
+      team: Math.floor(teamUnits / 2),
+      opp:  Math.floor(oppUnits  / 2),
+    };
+  }, [rows]); 
 
   useEffect(() => {
     let mounted = true;
