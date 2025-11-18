@@ -926,3 +926,105 @@
   text-align:right;
   line-height:1.2;
 }
+
+.sl-donate-wide {
+  margin-top: 32px;
+  padding: 32px 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #174d2a, #009b4f);
+  color: #fff;
+}
+
+.sl-donate-content {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.sl-donate-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.sl-donate-text {
+  margin: 4px 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.sl-donate-button {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: #fff;
+  color: #174d2a;
+  font-weight: 700;
+  text-decoration: none;
+}
+/* ---------- MOBILE DASHBOARD NAV FIX ---------- */
+@media (max-width: 768px) {
+  .sl-topnav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .sl-brand {
+    margin-bottom: 4px;
+  }
+
+  .sl-navlinks {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;           /* allow items to go to 2 lines */
+    gap: 8px 12px;
+    justify-content: flex-start;
+    font-size: 0.85rem;        /* a bit smaller on phone */
+  }
+
+  .sl-navlink,
+  .sl-navlink-accent,
+  .sl-navlink-donate {
+    padding: 4px 8px;
+  }
+
+  .sl-userbox {
+    align-self: flex-end;
+    font-size: 0.8rem;
+  }
+}
+.sl-live-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sl-live-item {
+  font-size: 0.9rem;
+}
+
+/* Optional nicer layout on bigger screens */
+@media (min-width: 768px) {
+  .sl-live-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+}
+.sl-live-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;        /* space between the red blocks */
+}
+
+.sl-live-count {
+  font-weight: 700;
+  color: #c0392b;   /* same red vibe as the banner text */
+  margin-bottom: 4px;
+}
+.ls-match-block {
+  margin-bottom: 24px;
+}

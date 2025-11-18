@@ -18,15 +18,23 @@ const headers = {
 async function fetchJSON(url) {
   const res = await fetch(url, { headers });
   if (!res.ok) return null;
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 function looksLive(m) {
   const st = String(m?.status ?? "").toLowerCase();
   const started = Boolean(m?.started);
-  return (st === "live" || st === "in_progress" || st === "in-progress" || started) && st !== "completed";
+  return (
+    (st === "live" || st === "in_progress" || st === "in-progress" || started) &&
+    st !== "completed"
+  );
 }
 
+// NOW RETURNS AN ARRAY OF LIVE MATCHES
 async function fetchLiveMatch() {
   // Try dedicated endpoints first
   for (const url of [
@@ -35,25 +43,32 @@ async function fetchLiveMatch() {
   ]) {
     const d = await fetchJSON(url);
     if (!d) continue;
+
     const arr = Array.isArray(d) ? d : [d];
-    const found = arr.find(looksLive) || (arr.length === 1 && looksLive(arr[0]) ? arr[0] : null);
-    if (found) {
-      const full = await fetchJSON(`${API_BASE}/schedule/${found.id}`); // hydrate details
-      return full || found;
+    const lives = arr.filter(looksLive);
+
+    if (lives.length) {
+      // hydrate each match with full details if possible
+      const full = [];
+      for (const m of lives) {
+        const details = await fetchJSON(`${API_BASE}/schedule/${m.id}`);
+        full.push(details || m);
+      }
+      return full; // ARRAY OF LIVE MATCHES
     }
   }
+
   // Fallback: list all and filter
   const all = await fetchJSON(`${API_BASE}/schedule`);
   if (Array.isArray(all)) {
     const lives = all.filter(looksLive);
     if (lives.length) {
-      lives.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-      const cand = lives[0];
-      const full = await fetchJSON(`${API_BASE}/schedule/${cand.id}`);
-      return full || cand;
+      lives.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+      return lives; // ARRAY
     }
   }
-  return null;
+
+  return []; // NO LIVE MATCHES
 }
 
 async function fetchUpcomingMatch() {
@@ -62,14 +77,19 @@ async function fetchUpcomingMatch() {
     `${API_BASE}/schedule?status=scheduled`,
     `${API_BASE}/schedule/upcoming`,
     `${API_BASE}/schedule`,
-    
   ]) {
     const d = await fetchJSON(url);
     if (!d) continue;
-    const arr = Array.isArray(d) ? d : (d?.items || d?.results || (d ? [d] : []));
+    const arr = Array.isArray(d)
+      ? d
+      : d?.items || d?.results || (d ? [d] : []);
     const future = arr
-      .filter(m => m?.date && String(m?.status || "").toLowerCase() !== "completed")
-      .filter(m => new Date(m.date).getTime() >= Date.now())
+      .filter(
+        (m) =>
+          m?.date &&
+          String(m?.status || "").toLowerCase() !== "completed"
+      )
+      .filter((m) => new Date(m.date).getTime() >= Date.now())
       .sort((a, b) => new Date(a.date) - new Date(b.date));
     if (future.length) return future[0];
   }
@@ -93,7 +113,15 @@ function useCountdown(iso) {
 }
 
 const fmtDate = (iso) =>
-  iso ? new Date(iso).toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }) : "TBD";
+  iso
+    ? new Date(iso).toLocaleString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "TBD";
 
 function TopNav({ name, hasLive }) {
   return (
@@ -107,16 +135,36 @@ function TopNav({ name, hasLive }) {
       </div>
 
       <nav className="sl-navlinks">
-        <Link to="/dashboard" className="sl-navlink">Dashboard</Link>
-        <Link to="/schedule" className="sl-navlink">Schedule</Link>
-        <Link to="/players" className="sl-navlink">Roster</Link>
-        {hasLive && <Link to="/livescore" className="sl-navlink sl-navlink-accent">Live Scores</Link>}
-        <Link to="/admin" className="sl-navlink">Admin Panel</Link>
+        <Link to="/dashboard" className="sl-navlink">
+          Dashboard
+        </Link>
+        <Link to="/schedule" className="sl-navlink">
+          Schedule
+        </Link>
+        <Link to="/players" className="sl-navlink">
+          Roster
+        </Link>
+        {hasLive && (
+          <Link to="/livescore" className="sl-navlink sl-navlink-accent">
+            Live Scores
+          </Link>
+        )}
+        {/* Donate – external link in nav */}
+        <a
+          href="https://ets.rocks/4o1T9nO"
+          target="_blank"
+          rel="noreferrer"
+          className="sl-navlink sl-navlink-donate"
+        >
+          Donate
+        </a>
+        <Link to="/admin" className="sl-navlink">
+          Admin Panel
+        </Link>
       </nav>
 
       <div className="sl-userbox">
         <span className="sl-username">{name}</span>
-        <button className="sl-logout" onClick={() => { localStorage.clear(); }}>Logout</button>
       </div>
     </header>
   );
@@ -126,22 +174,26 @@ export default function Dashbord() {
   const navigate = useNavigate();
   const guestName = localStorage.getItem("guestName") || "Guest";
 
-  const [liveMatch, setLiveMatch] = useState(null);
+  const [liveMatches, setLiveMatches] = useState([]); // ARRAY
   const [nextMatch, setNextMatch] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const hasLive = !!liveMatch;
+  const hasLive = liveMatches.length > 0;
   const { d, h, m, s } = useCountdown(nextMatch?.date);
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       setLoading(true);
-      const lm = await fetchLiveMatch();
+      const lm = await fetchLiveMatch(); // returns []
       if (!mounted) return;
-      if (lm) {
-        setLiveMatch(lm);
+
+      if (lm && lm.length > 0) {
+        setLiveMatches(lm);
+        setNextMatch(null);
       } else {
+        setLiveMatches([]);
         const up = await fetchUpcomingMatch();
         if (!mounted) return;
         setNextMatch(up);
@@ -152,11 +204,22 @@ export default function Dashbord() {
     const t = setInterval(async () => {
       const lm = await fetchLiveMatch();
       if (!mounted) return;
-      setLiveMatch(lm);
-      if (!lm) setNextMatch(await fetchUpcomingMatch());
+
+      if (lm && lm.length > 0) {
+        setLiveMatches(lm);
+        setNextMatch(null);
+      } else {
+        setLiveMatches([]);
+        const up = await fetchUpcomingMatch();
+        if (!mounted) return;
+        setNextMatch(up);
+      }
     }, 15000);
 
-    return () => { mounted = false; clearInterval(t); };
+    return () => {
+      mounted = false;
+      clearInterval(t);
+    };
   }, []);
 
   return (
@@ -168,24 +231,43 @@ export default function Dashbord() {
         <p className="sl-subtitle">Saint Leo Lions Tennis Team Dashboard</p>
 
         {loading ? (
-          <div className="sl-card sl-skeleton">Loading…</div>
-        ) : hasLive ? (
-          <div className="sl-live-banner">
-            <div className="sl-live-left">
-              <span className="sl-live-dot" aria-hidden>•</span>
-              <span className="sl-live-text">Live match in progress</span>
-              <div className="sl-live-title">
-                {liveMatch?.opponent ? `Lions vs ${liveMatch.opponent}` : "Live Match"}
-              </div>
-              {liveMatch?.location && <div className="sl-live-loc">📍 {liveMatch.location}</div>}
-            </div>
-            <div className="sl-live-right">
-              <button className="sl-view-btn" onClick={() => navigate("/livescore")}>
-                View Live Scores
-              </button>
-            </div>
+  <div className="sl-card sl-skeleton">Loading…</div>
+) : hasLive ? (
+  <div className="sl-live-stack">
+    {/* Optional header with count */}
+    <div className="sl-live-count">
+      {liveMatches.length} LIVE MATCH
+      {liveMatches.length > 1 ? "ES" : ""} IN PROGRESS
+    </div>
+
+    {liveMatches.map((m) => (
+      <div className="sl-live-banner" key={m.id}>
+        <div className="sl-live-left">
+          <span className="sl-live-dot" aria-hidden>
+            •
+          </span>
+          <span className="sl-live-text">Live match in progress</span>
+          <div className="sl-live-title">
+            {m.opponent ? `Lions vs ${m.opponent}` : "Live Match"}
           </div>
-        ) : (
+          {m.location && (
+            <div className="sl-live-loc">
+              📍 {m.location}
+            </div>
+          )}
+        </div>
+        <div className="sl-live-right">
+          <button
+            className="sl-view-btn"
+            onClick={() => navigate("/livescore")}
+          >
+            View Live Scores
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
           <div className="sl-next-pretty">
             <div className="sl-next-left">
               <div className="sl-next-title">No live matches right now</div>
@@ -193,46 +275,88 @@ export default function Dashbord() {
 
               {nextMatch?.date ? (
                 <div className="sl-countdown">
-                  <div className="sl-unit"><span>{String(d).padStart(2,"0")}</span><small>days</small></div>
+                  <div className="sl-unit">
+                    <span>{String(d).padStart(2, "0")}</span>
+                    <small>days</small>
+                  </div>
                   <div className="sl-colon">:</div>
-                  <div className="sl-unit"><span>{String(h).padStart(2,"0")}</span><small>hrs</small></div>
+                  <div className="sl-unit">
+                    <span>{String(h).padStart(2, "0")}</span>
+                    <small>hrs</small>
+                  </div>
                   <div className="sl-colon">:</div>
-                  <div className="sl-unit"><span>{String(m).padStart(2,"0")}</span><small>min</small></div>
+                  <div className="sl-unit">
+                    <span>{String(m).padStart(2, "0")}</span>
+                    <small>min</small>
+                  </div>
                   <div className="sl-colon">:</div>
-                  <div className="sl-unit"><span>{String(s).padStart(2,"0")}</span><small>sec</small></div>
+                  <div className="sl-unit">
+                    <span>{String(s).padStart(2, "0")}</span>
+                    <small>sec</small>
+                  </div>
                 </div>
               ) : (
                 <div className="sl-next-fallback">TBD — check schedule</div>
               )}
 
               <div className="sl-next-meta">
-                {nextMatch?.opponent ? `Lions vs ${nextMatch.opponent}` : "Opponent TBA"}
+                {nextMatch?.opponent
+                  ? `Lions vs ${nextMatch.opponent}`
+                  : "Opponent TBA"}
                 {nextMatch?.location ? ` • ${nextMatch.location}` : ""}
               </div>
               <div className="sl-next-date">{fmtDate(nextMatch?.date)}</div>
             </div>
 
             <div className="sl-next-right">
-              <Link className="sl-view-btn" to="/schedule">View Schedule</Link>
+              <Link className="sl-view-btn" to="/schedule">
+                View Schedule
+              </Link>
             </div>
           </div>
         )}
 
+        {/* Regular cards */}
         <section className="sl-cards">
           <Link to="/schedule" className="sl-card">
             <div className="sl-cta-title">Schedule</div>
             <div className="sl-cta-sub">Upcoming & past matches</div>
           </Link>
+
           {!hasLive && (
             <Link to="/livescore" className="sl-card sl-cta">
               <div className="sl-cta-title">Scores</div>
               <div className="sl-cta-sub">Open scoreboard</div>
             </Link>
           )}
+
           <Link to="/admin" className="sl-card">
             <div className="sl-cta-title">Admin Panel</div>
             <div className="sl-cta-sub">Manage matches & scores</div>
           </Link>
+        </section>
+
+        {/* Big donate section at the very bottom */}
+        <section className="sl-donate-wide">
+          <div className="sl-donate-content">
+            <h2 className="sl-donate-title">Support Saint Leo Tennis</h2>
+            <p className="sl-donate-text">
+              Your donation helps our team with travel, equipment, and creating
+              the best possible experience for our student-athletes.
+            </p>
+            <p className="sl-donate-text">
+              Every contribution, big or small, makes a real impact on our
+              season.
+            </p>
+            <a
+              href="https://ets.rocks/4o1T9nO"
+              target="_blank"
+              rel="noreferrer"
+              className="sl-donate-button"
+            >
+              Donate Now
+            </a>
+          </div>
         </section>
       </main>
     </div>

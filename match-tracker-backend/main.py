@@ -10,25 +10,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 # Pydantic
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 
 # SQLAlchemy
 import sqlalchemy as sa
 from sqlalchemy import create_engine, delete, insert, select, update, Column, String, and_
 from sqlalchemy.sql import func
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
 
 # JWT / password hashing
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 # App modules
-from db_setup import engine, SessionLocal, metadata  # shared engine/session/metadata
-from models import players, matches, database, scores as scores_tbl, users
-
-# Setup SQLite database
-DATABASE_URL = "sqlite:///./matches.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+from db_setup import engine, SessionLocal, metadata, database
+from models import players, matches, scores as scores_tbl, users
 
 # Create tables
 app = FastAPI()
@@ -36,10 +33,12 @@ metadata.create_all(bind=engine)
 
 
 
-SECRET_KEY = "change-me"
+SECRET_KEY = "change-me"  # make sure this is the SAME everywhere
 ALGO = "HS256"
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+pwd = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,69 +52,13 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
-# Connect database on startup/shutdown
-@app.on_event("startup")
-async def startup():
-    await database.connect()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
-
-@app.get("/")
-async def root():
-    return {"message": "Match Tracker API is running!"}
 
 
+class RegisterUser(BaseModel):
+    email: EmailStr
+    password: str
+    role: str = "user"
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def create_access_token(sub: int, role: str, hours: int = 12):
-    payload = {"sub": sub, "role": role, "exp": datetime.utcnow() + timedelta(hours=hours)}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGO)
-
-def get_current_user(token: str = Depends(oauth2), db=Depends(get_db)):
-    cred_exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGO])
-        uid = payload.get("sub"); role = payload.get("role")
-        if uid is None or role is None:
-            raise cred_exc
-    except JWTError:
-        raise cred_exc
-
-    row = db.execute(sa.select(users).where(users.c.id == uid)).mappings().first()
-    if not row:
-        raise cred_exc
-    return row  # dict-like mapping with keys id, email, role, etc.
-
-def admin_required(current_user = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return current_user
-
-@app.post("/auth/login")
-def login(form: OAuth2PasswordRequestForm = Depends(), db=Depends(get_db)):
-    row = db.execute(sa.select(users).where(users.c.email == form.username)).mappings().first()
-    if not row or not pwd.verify(form.password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="Bad credentials")
-    token = create_access_token(sub=row["id"], role=row["role"])
-    return {"access_token": token, "token_type": "bearer", "user": {"id": row["id"], "email": row["email"], "role": row["role"]}}
-
-@app.get("/auth/me")
-def me(user = Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "role": user["role"]}
-
-# Example: admin-only endpoint
-@app.post("/admin/players")
-def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_db)):
-    # ...perform insert/update using Core...
-    return {"ok": True, "by": user["email"]}
 class Match(BaseModel):
     date: str  # or datetime if you use from datetime import datetime
     gender: str
@@ -220,6 +163,133 @@ class MatchOut(BaseModel):
 
 class WinnerBody(BaseModel):
     winner: str 
+
+# Connect database on startup/shutdown
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
+
+@app.get("/")
+async def root():
+    return {"message": "Match Tracker API is running!"}
+
+def create_access_token(sub: int, role: str, hours: int = 12):
+    payload = {
+        "sub": str(sub),
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(hours=hours),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGO)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_current_user(token: str = Depends(oauth2), db=Depends(get_db)):
+    
+
+    cred_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGO])
+       
+
+        uid = payload.get("sub")
+        role = payload.get("role")
+       
+
+        if uid is None or role is None:
+            print("MISSING uid/role IN TOKEN → 401")
+            raise cred_exc
+
+        uid = int(uid)  # <-- cast to int for DB lookup
+    except (JWTError, ValueError) as e:
+        print("JWT DECODE / UID ERROR:", repr(e))
+        raise cred_exc
+
+    row = db.execute(sa.select(users).where(users.c.id == uid)).mappings().first()
+    print("USER ROW FROM DB:", row)
+
+    if not row:
+        print("NO USER FOUND FOR ID", uid, "→ 401")
+        raise cred_exc
+
+    return row
+
+
+
+def admin_required(current_user = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
+
+@app.post("/auth/register")
+async def register_user(payload: RegisterUser, db=Depends(get_db)):
+    try:
+        # Hash the password
+        password_hash = pwd.hash(payload.password)
+        print("Password during registration:", payload.password)
+        print("Hashed password during registration:", password_hash)
+
+        # Insert the new user into the database
+        query = users.insert().values(email=payload.email, password_hash=password_hash, role=payload.role)
+        new_user_id = await database.execute(query)
+
+        return {"id": new_user_id, "email": payload.email, "role": payload.role}
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+@app.post("/auth/login")
+def login(form: OAuth2PasswordRequestForm = Depends(), db=Depends(get_db)):
+    print("Raw username repr:", repr(form.username))
+
+    # DEBUG: list all users this app sees
+    rows = db.execute(sa.select(users)).mappings().all()
+
+
+    clean_username = form.username.strip().lower()
+
+    row = db.execute(
+        sa.select(users).where(func.lower(users.c.email) == clean_username)
+    ).mappings().first()
+    print("Query result:", row)
+
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+
+    if not pwd.verify(form.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = create_access_token(sub=row["id"], role=row["role"])
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": row["id"], "email": row["email"], "role": row["role"]},
+    }
+
+
+@app.get("/auth/me")
+def me(user = Depends(get_current_user)):
+    return {"id": user["id"], "email": user["email"], "role": user["role"]}
+
+# Example: admin-only endpoint
+@app.post("/admin/players")
+def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_db)):
+    # ...perform insert/update using Core...
+    current_user = Depends(admin_required),
+    return {"ok": True, "by": user["email"]}
 
 def row_to_iso(row):
     d = dict(row)
@@ -364,6 +434,7 @@ async def _fetch_match_scores(match_id: int):
 
 @app.post("/schedule")
 async def create_match(match: Match):
+    current_user = Depends(admin_required),
     query = matches.insert().values(
         date=datetime.fromisoformat(match.date),
         gender=match.gender,
@@ -426,7 +497,9 @@ async def get_schedule_by_id(id: int):
 live_scores: List[Dict] = []  # in-memory storage
 
 @app.post("/schedule/{match_id}/start")
+
 async def start_match(match_id: int):
+    current_user = Depends(admin_required),
     # Check if the match exists
     existing = await database.fetch_one(matches.select().where(matches.c.id == match_id))
     if not existing:
@@ -484,6 +557,7 @@ async def start_match(match_id: int):
 
 @app.post("/schedule/{match_id}/complete")
 async def complete_match(match_id: int, body: WinnerBody):
+    current_user = Depends(admin_required),
     # update DB
     query = (
         matches.update()
@@ -508,6 +582,7 @@ async def complete_match(match_id: int, body: WinnerBody):
 
 @app.delete("/schedule/{match_id}")
 async def delete_match_and_scores(match_id: int):
+    current_user = Depends(admin_required),
     existing = await database.fetch_one(matches.select().where(matches.c.id == match_id))
     if not existing:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -522,6 +597,7 @@ async def delete_match_and_scores(match_id: int):
 
 @app.post("/players")
 async def create_player(player: Player):
+    current_user = Depends(admin_required),
     query = players.insert().values(
         name=player.name,
         year=player.year,
@@ -538,6 +614,7 @@ async def get_players():
 
 @app.put("/players/{player_id}")
 async def update_player(player_id: int, payload: dict):
+    current_user = Depends(admin_required),
     query = players.update().where(players.c.id == player_id).values(**payload)
     await database.execute(query)
     return {"message": "Player updated"}
@@ -545,6 +622,7 @@ async def update_player(player_id: int, payload: dict):
 
 @app.delete("/players/{player_id}")
 async def delete_player(player_id: int):
+    current_user = Depends(admin_required),
     query = players.delete().where(players.c.id == player_id)
     result = await database.execute(query)
 
@@ -559,6 +637,7 @@ def get_livescore():
 
 @app.post("/scores/{score_id}/start")
 async def start_score(score_id: int, body: StartScorePayload):
+    current_user = Depends(admin_required),
     # fetch the row
     row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
@@ -606,6 +685,7 @@ async def start_score(score_id: int, body: StartScorePayload):
     }
 @app.post("/scores/{score_id}/complete")
 async def complete_score(score_id: int, body: CompleteScorePayload):
+    current_user = Depends(admin_required),
     row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
     if not row:
         raise HTTPException(status_code=404, detail="Score row not found")
@@ -638,6 +718,7 @@ async def get_scores_by_id(scores_id: int):
 
 @app.put("/scores/{scores_id}")
 async def update_scores(scores_id: int, scores_data: UpdateScore):
+    current_user = Depends(admin_required),
     # build the fields we actually want to update
     values = {}
 
@@ -685,6 +766,7 @@ async def update_scores(scores_id: int, scores_data: UpdateScore):
 
 @app.delete("/scores/{scores_id}")
 async def delete_scores(scores_id: int):
+    current_user = Depends(admin_required),
     exists = await database.fetch_one(select(scores_tbl.c.id).where(scores_tbl.c.id == scores_id))
     if not exists:
         raise HTTPException(status_code=404, detail="scores not found")
@@ -707,6 +789,7 @@ async def get_scores_by_match(match_id: int):
 @app.post("/scores/match/{match_id}/complete")
 async def complete_scores_match(match_id: int, winner: Literal["team", "opponent"]):
     # Fetch all scores for the given match_id
+    current_user = Depends(admin_required),
     scores_query = scores_tbl.select().where(scores_tbl.c.match_id == match_id)
     scores_list = await database.fetch_all(scores_query)
 

@@ -2,11 +2,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "../styles.css";
-import { useAdmin } from "../AdminContext";
+import { useAuth } from "../AuthContext";
 import API_BASE_URL from "../config";
 
 // ------------ Top Nav (same look as Schedule/Dashboard)
-function TopNav({ name, hasLive }) {
+function TopNav({ hasLive }) {
+  const { user, logout } = useAuth();
+  const displayName = user ? user.email : "Guest";
+
   return (
     <header className="sl-topnav">
       <div className="sl-brand">
@@ -26,13 +29,7 @@ function TopNav({ name, hasLive }) {
       </nav>
 
       <div className="sl-userbox">
-        <span className="sl-username">{name}</span>
-        <button
-          className="sl-logout"
-          onClick={() => { localStorage.clear(); }}
-        >
-          Logout
-        </button>
+        <span className="sl-username">{displayName}</span>
       </div>
     </header>
   );
@@ -90,7 +87,6 @@ async function getRosterByGender(gender) {
       doubles_all_time: p.doubles_all_time || "",
       hand: p.hand || "",
     }));
-    // if endpoint not filtered, filter here
     const filtered = mapped.filter((p) => p.gender === gender);
     if (u.includes("?gender=")) return filtered;
     if (filtered.length || mapped.length) return filtered.length ? filtered : mapped;
@@ -101,7 +97,7 @@ async function getRosterByGender(gender) {
 const YEAR_ORDER = { Senior: 4, Junior: 3, Sophomore: 2, Freshman: 1 };
 
 // ------------ Small UI bits
-function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
+function PlayerCard({ p, isAdmin, token, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...p });
 
@@ -110,7 +106,10 @@ function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
   const save = async () => {
     const res = await fetch(`${API_BASE_URL}/players/${p.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(form),
     });
     if (res.ok) {
@@ -130,7 +129,13 @@ function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
             {isAdmin && (
               <div style={{ display:"flex", gap:8 }}>
                 <button className="sl-navlink" onClick={() => setEditing(true)}>Edit</button>
-                <button className="sl-logout" onClick={() => onDelete?.(p.id)} style={{ borderColor:"#f3c1c1" }}>Delete</button>
+                <button
+                  className="sl-logout"
+                  onClick={() => onDelete?.(p.id)}
+                  style={{ borderColor:"#f3c1c1" }}
+                >
+                  Delete
+                </button>
               </div>
             )}
           </div>
@@ -155,17 +160,44 @@ function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
         <>
           <div style={{ fontWeight:700, color:"#174d2a", marginBottom:8 }}>Edit Player</div>
           <div style={{ display:"grid", gap:8 }}>
-            <input value={form.name} onChange={(e)=>setForm(f=>({...f,name:e.target.value}))} placeholder="Name" />
-            <input value={form.year} onChange={(e)=>setForm(f=>({...f,year:e.target.value}))} placeholder="Year (Freshman…Senior)" />
-            <select value={form.gender || ""} onChange={(e)=>setForm(f=>({...f,gender:e.target.value}))}>
+            <input
+              value={form.name}
+              onChange={(e)=>setForm(f=>({...f,name:e.target.value}))}
+              placeholder="Name"
+            />
+            <input
+              value={form.year}
+              onChange={(e)=>setForm(f=>({...f,year:e.target.value}))}
+              placeholder="Year (Freshman…Senior)"
+            />
+            <select
+              value={form.gender || ""}
+              onChange={(e)=>setForm(f=>({...f,gender:e.target.value}))}
+            >
               <option value="">Gender</option>
               <option value="men">Men</option>
               <option value="women">Women</option>
             </select>
-            <input value={form.singles_season} onChange={(e)=>setForm(f=>({...f,singles_season:e.target.value}))} placeholder="Singles (Season)" />
-            <input value={form.singles_all_time} onChange={(e)=>setForm(f=>({...f,singles_all_time:e.target.value}))} placeholder="Singles (All-Time)" />
-            <input value={form.doubles_season} onChange={(e)=>setForm(f=>({...f,doubles_season:e.target.value}))} placeholder="Doubles (Season)" />
-            <input value={form.doubles_all_time} onChange={(e)=>setForm(f=>({...f,doubles_all_time:e.target.value}))} placeholder="Doubles (All-Time)" />
+            <input
+              value={form.singles_season}
+              onChange={(e)=>setForm(f=>({...f,singles_season:e.target.value}))}
+              placeholder="Singles (Season)"
+            />
+            <input
+              value={form.singles_all_time}
+              onChange={(e)=>setForm(f=>({...f,singles_all_time:e.target.value}))}
+              placeholder="Singles (All-Time)"
+            />
+            <input
+              value={form.doubles_season}
+              onChange={(e)=>setForm(f=>({...f,doubles_season:e.target.value}))}
+              placeholder="Doubles (Season)"
+            />
+            <input
+              value={form.doubles_all_time}
+              onChange={(e)=>setForm(f=>({...f,doubles_all_time:e.target.value}))}
+              placeholder="Doubles (All-Time)"
+            />
             <div style={{ display:"flex", gap:8, marginTop:4 }}>
               <button className="sl-view-btn" onClick={save}>Save</button>
               <button className="sl-logout" onClick={()=>setEditing(false)}>Cancel</button>
@@ -178,8 +210,7 @@ function PlayerCard({ p, isAdmin, onEdit, onDelete }) {
 }
 
 export default function PlayerList() {
-  const { isAdmin } = useAdmin();
-  const guestName = localStorage.getItem("guestName") || (isAdmin ? "Admin" : "Guest");
+  const { isAdmin, token } = useAuth();
 
   const [tab, setTab] = useState("men"); // 'men' | 'women'
   const [players, setPlayers] = useState([]);
@@ -217,13 +248,20 @@ export default function PlayerList() {
 
   const sorted = useMemo(() => {
     const copy = [...players];
-    copy.sort((a,b) => (YEAR_ORDER[b.year?.trim?.()]||0) - (YEAR_ORDER[a.year?.trim?.()]||0));
+    copy.sort(
+      (a,b) => (YEAR_ORDER[b.year?.trim?.()]||0) - (YEAR_ORDER[a.year?.trim?.()]||0)
+    );
     return copy;
   }, [players]);
 
   const onDelete = async (id) => {
     if (!window.confirm("Delete this player?")) return;
-    const res = await fetch(`${API_BASE_URL}/players/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE_URL}/players/${id}`, {
+      method: "DELETE",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
     if (res.ok) setPlayers((prev) => prev.filter(p => p.id !== id));
     else alert("Failed to delete player.");
   };
@@ -238,7 +276,10 @@ export default function PlayerList() {
     const payload = { ...newPlayer, gender: tab }; // ensure player lands in current tab
     const res = await fetch(`${API_BASE_URL}/players`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     if (res.ok) {
@@ -262,7 +303,7 @@ export default function PlayerList() {
 
   return (
     <>
-      <TopNav name={guestName} hasLive={live} />
+      <TopNav hasLive={live} />
 
       <div className="sl-main" style={{ maxWidth: 1100, margin: "16px auto", padding: "0 16px" }}>
         <h1 className="sl-welcome">Roster</h1>
@@ -297,22 +338,75 @@ export default function PlayerList() {
 
         {/* Add Player (admin) */}
         {isAdmin && showForm && (
-          <form onSubmit={submitNew} className="sl-card" style={{ padding: 14, marginBottom: 12 }}>
-            <div style={{ display:"grid", gap:8, gridTemplateColumns:"1fr 1fr", alignItems:"center" }}>
-              <input name="name" placeholder="Name" value={newPlayer.name} onChange={(e)=>setNewPlayer(f=>({...f,name:e.target.value}))} required />
-              <input name="year" placeholder="Year (Freshman…Senior)" value={newPlayer.year} onChange={(e)=>setNewPlayer(f=>({...f,year:e.target.value}))} />
-              <select name="gender" value={newPlayer.gender} onChange={(e)=>setNewPlayer(f=>({...f,gender:e.target.value}))}>
+          <form
+            onSubmit={submitNew}
+            className="sl-card"
+            style={{ padding: 14, marginBottom: 12 }}
+          >
+            <div
+              style={{
+                display:"grid",
+                gap:8,
+                gridTemplateColumns:"1fr 1fr",
+                alignItems:"center"
+              }}
+            >
+              <input
+                name="name"
+                placeholder="Name"
+                value={newPlayer.name}
+                onChange={(e)=>setNewPlayer(f=>({...f,name:e.target.value}))}
+                required
+              />
+              <input
+                name="year"
+                placeholder="Year (Freshman…Senior)"
+                value={newPlayer.year}
+                onChange={(e)=>setNewPlayer(f=>({...f,year:e.target.value}))}
+              />
+              <select
+                name="gender"
+                value={newPlayer.gender}
+                onChange={(e)=>setNewPlayer(f=>({...f,gender:e.target.value}))}
+              >
                 <option value="men">Men</option>
                 <option value="women">Women</option>
               </select>
-              <input name="hand" placeholder="Hand (R/L)" value={newPlayer.hand} onChange={(e)=>setNewPlayer(f=>({...f,hand:e.target.value}))} />
-              <input name="singles_season" placeholder="Singles (Season)" value={newPlayer.singles_season} onChange={(e)=>setNewPlayer(f=>({...f,singles_season:e.target.value}))} />
-              <input name="singles_all_time" placeholder="Singles (All-Time)" value={newPlayer.singles_all_time} onChange={(e)=>setNewPlayer(f=>({...f,singles_all_time:e.target.value}))} />
-              <input name="doubles_season" placeholder="Doubles (Season)" value={newPlayer.doubles_season} onChange={(e)=>setNewPlayer(f=>({...f,doubles_season:e.target.value}))} />
-              <input name="doubles_all_time" placeholder="Doubles (All-Time)" value={newPlayer.doubles_all_time} onChange={(e)=>setNewPlayer(f=>({...f,doubles_all_time:e.target.value}))} />
+              <input
+                name="hand"
+                placeholder="Hand (R/L)"
+                value={newPlayer.hand}
+                onChange={(e)=>setNewPlayer(f=>({...f,hand:e.target.value}))}
+              />
+              <input
+                name="singles_season"
+                placeholder="Singles (Season)"
+                value={newPlayer.singles_season}
+                onChange={(e)=>setNewPlayer(f=>({...f,singles_season:e.target.value}))}
+              />
+              <input
+                name="singles_all_time"
+                placeholder="Singles (All-Time)"
+                value={newPlayer.singles_all_time}
+                onChange={(e)=>setNewPlayer(f=>({...f,singles_all_time:e.target.value}))}
+              />
+              <input
+                name="doubles_season"
+                placeholder="Doubles (Season)"
+                value={newPlayer.doubles_season}
+                onChange={(e)=>setNewPlayer(f=>({...f,doubles_season:e.target.value}))}
+              />
+              <input
+                name="doubles_all_time"
+                placeholder="Doubles (All-Time)"
+                value={newPlayer.doubles_all_time}
+                onChange={(e)=>setNewPlayer(f=>({...f,doubles_all_time:e.target.value}))}
+              />
             </div>
             <div style={{ marginTop:10 }}>
-              <button type="submit" className="sl-view-btn">Add Player ({tab})</button>
+              <button type="submit" className="sl-view-btn">
+                Add Player ({tab})
+              </button>
             </div>
           </form>
         )}
@@ -321,12 +415,19 @@ export default function PlayerList() {
         {loading ? (
           <div className="sl-card sl-skeleton">Loading…</div>
         ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:12 }}>
+          <div
+            style={{
+              display:"grid",
+              gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",
+              gap:12
+            }}
+          >
             {sorted.map((p) => (
               <PlayerCard
                 key={p.id}
                 p={p}
                 isAdmin={isAdmin}
+                token={token}
                 onEdit={onEditDone}
                 onDelete={onDelete}
               />

@@ -1,63 +1,54 @@
-import { useState,useEffect  } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Schedule  from "./components/Schedule";
+// src/App.js
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Schedule from "./components/Schedule";
 import PlayerList from "./components/PlayerList";
 import LiveScore from "./components/LiveScore";
 import Admin from "./Admin";
-import RoleSelector from "./components/RoleSelector";
-import { AdminProvider, useAdmin } from './AdminContext'; // NEW
 import BoxScorePage from "./components/BoxScorePage";
-import Dashboard from './components/Dashbord';
+import Dashboard from "./components/Dashbord";
 
+import Header from "./components/Header";
+import { AuthProvider, useAuth } from "./AuthContext";
 
-function AppContent() {
-  const [roleSelected, setRoleSelected] = useState(() => {
-    return localStorage.getItem("roleSelected") === "true";
-  });
-  const { setIsAdmin } = useAdmin();
+// This component holds the routes and uses auth state
+function AppRoutes() {
+  const { loading, isAdmin } = useAuth();
 
-  useEffect(() => {
-    const isAdmin = localStorage.getItem("isAdmin") === "true";
-    setIsAdmin(isAdmin);
-  }, [setIsAdmin]);
-
-  if (!roleSelected) {
-    return (
-      <RoleSelector
-        onSelect={(role) => {
-          const isAdmin = role === "admin";
-          setIsAdmin(isAdmin);
-          localStorage.setItem("isAdmin", isAdmin);
-          localStorage.setItem("roleSelected", true);
-          setRoleSelected(true);
-        }}
-      />
-    );
+  if (loading) {
+    // while we restore auth from localStorage
+    return <div style={{ padding: 16 }}>Loading...</div>;
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/schedule" element={<Schedule />} />
-      <Route path="/players" element={<PlayerList />} />
-      <Route path="/livescore" element={<LiveScore />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="/boxscore/:id" element={<BoxScorePage />} />
+    <>
+      <Header />
 
-    </Routes>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/players" element={<PlayerList />} />
+        <Route path="/livescore" element={<LiveScore />} />
+        <Route path="/boxscore/:id" element={<BoxScorePage />} />
+
+        {/* Admin route: only admins can see this page on the frontend */}
+        <Route
+          path="/admin"
+          element={isAdmin ? <Admin /> : <Navigate to="/" replace />}
+        />
+      </Routes>
+    </>
   );
 }
 
 function App() {
   return (
-    <AdminProvider>
+    <AuthProvider>
       <BrowserRouter>
-        <AppContent />
+        <AppRoutes />
       </BrowserRouter>
-    </AdminProvider>
+    </AuthProvider>
   );
 }
 
 export default App;
-
