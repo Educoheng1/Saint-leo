@@ -5,3 +5,4 @@ databases
 aiosqlite
 python-jose[cryptography]
 passlib[bcrypt]
+pydantic[email]
