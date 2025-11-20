@@ -68,9 +68,7 @@ async function hasLiveMatch() {
 async function getRosterByGender(gender) {
   const urls = [
     `${API_BASE_URL}/players?gender=${gender}`,
-    `${API_BASE_URL}/roster?gender=${gender}`,
     `${API_BASE_URL}/players`,
-    `${API_BASE_URL}/roster`,
   ];
   for (const u of urls) {
     const d = await fetchJSON(u);

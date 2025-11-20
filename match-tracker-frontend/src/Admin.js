@@ -414,8 +414,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave }) {
 
 async function loadPlayers() {
   const d =
-    (await fetchJSON(`${API_BASE_URL}/players`)) ||
-    (await fetchJSON(`${API_BASE_URL}/roster`));
+    (await fetchJSON(`${API_BASE_URL}/players`));
   if (!Array.isArray(d)) return [];
   return d.map((p) => ({
     id: p.id,

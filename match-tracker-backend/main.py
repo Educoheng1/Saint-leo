@@ -24,8 +24,8 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 # App modules
-from db_setup import engine, SessionLocal, metadata, database
-from models import players, matches, scores as scores_tbl, users
+from db_setup import engine, SessionLocal, database
+from models import players,metadata, matches, scores as scores_tbl, users
 
 # Create tables
 app = FastAPI()
@@ -166,10 +166,6 @@ class WinnerBody(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    # Make sure all tables (including "matches") exist in the DB
-    metadata.create_all(bind=engine)
-
-    # Then connect to the database
     await database.connect()
 
 @app.on_event("shutdown")
