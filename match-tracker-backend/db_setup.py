@@ -1,21 +1,34 @@
+# db_setup.py
+import os
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from databases import Database
 
-# Import the ONE shared metadata from models
-from models import metadata  # this is where players, matches, etc. are defined
+# Import the ONE shared metadata from models (where tables are defined)
+from models import metadata
 
-DATABASE_URL = "sqlite:///./matches.db"
+# Read DB URL from env; fallback to local SQLite for development
+RAW_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./matches.db")
 
-# Sync engine for SQLAlchemy Core/ORM
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+# Normalize old postgres scheme if needed (just in case)
+if RAW_DATABASE_URL.startswith("postgres://"):
+    RAW_DATABASE_URL = RAW_DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-# SessionLocal for any ORM usage
+# This is the async URL used by `databases.Database`
+database = Database(RAW_DATABASE_URL)
+
+# Build a sync URL for SQLAlchemy engine (remove +asyncpg if present)
+if "+asyncpg" in RAW_DATABASE_URL:
+    SYNC_DATABASE_URL = RAW_DATABASE_URL.replace("+asyncpg", "")
+else:
+    SYNC_DATABASE_URL = RAW_DATABASE_URL
+
+# For SQLite we need connect_args; for Postgres we don't
+connect_args = {}
+if SYNC_DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+
+engine = create_engine(SYNC_DATABASE_URL, connect_args=connect_args)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Async DB for `databases` library – same file
-database = Database(DATABASE_URL)
