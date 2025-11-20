@@ -449,16 +449,27 @@ async def create_match( match: Match,
 
 @app.get("/schedule")
 async def list_schedule(status: Optional[str] = Query(None)):
-    # build query
-    q = matches.select().order_by(matches.c.date.desc())
-    if status:
-        q = q.where(func.lower(matches.c.status) == status.lower())
+    try:
+        # build query
+        q = matches.select().order_by(matches.c.date.desc())
+        if status:
+            q = q.where(func.lower(matches.c.status) == status.lower())
 
-    rows = await database.fetch_all(q)
-    # row_to_iso should handle datetime/date → isoformat; if you don't have it, convert here
-    data = [row_to_iso(r) for r in rows]
-    return data
+        rows = await database.fetch_all(q)
+        data = [row_to_iso(r) for r in rows]
+        return data
 
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        # TEMP: show the error so we can debug Render
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "traceback": tb,
+            },
+        )
 
 @app.get("/schedule/upcoming")
 async def get_upcoming_match():
