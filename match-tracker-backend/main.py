@@ -164,9 +164,11 @@ class MatchOut(BaseModel):
 class WinnerBody(BaseModel):
     winner: str 
 
-# Connect database on startup/shutdown
 @app.on_event("startup")
 async def startup():
+    # Make sure all tables (including "matches") exist in Render DB
+    metadata.create_all(bind=engine)  # or Base.metadata.create_all(bind=engine)
+
     await database.connect()
 
 @app.on_event("shutdown")
