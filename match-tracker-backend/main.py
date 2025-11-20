@@ -166,9 +166,10 @@ class WinnerBody(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    # Make sure all tables (including "matches") exist in Render DB
-    metadata.create_all(bind=engine)  # or Base.metadata.create_all(bind=engine)
+    # Make sure all tables (including "matches") exist in the DB
+    metadata.create_all(bind=engine)
 
+    # Then connect to the database
     await database.connect()
 
 @app.on_event("shutdown")
