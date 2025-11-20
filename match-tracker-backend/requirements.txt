@@ -8,3 +8,4 @@ passlib[bcrypt]
 pydantic[email]
 python-multipart
 asyncpg
+psycopg2
