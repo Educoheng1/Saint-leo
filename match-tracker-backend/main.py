@@ -286,9 +286,9 @@ def me(user = Depends(get_current_user)):
 
 # Example: admin-only endpoint
 @app.post("/admin/players")
-def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_db)):
+def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_db), 
     # ...perform insert/update using Core...
-    current_user = Depends(admin_required),
+    current_user = Depends(admin_required)):
     return {"ok": True, "by": user["email"]}
 
 def row_to_iso(row):
@@ -433,8 +433,8 @@ async def _fetch_match_scores(match_id: int):
 
 
 @app.post("/schedule")
-async def create_match(match: Match):
-    current_user = Depends(admin_required),
+async def create_match( match: Match, 
+    current_user = Depends(admin_required)):
     query = matches.insert().values(
         date=datetime.fromisoformat(match.date),
         gender=match.gender,
@@ -498,8 +498,8 @@ live_scores: List[Dict] = []  # in-memory storage
 
 @app.post("/schedule/{match_id}/start")
 
-async def start_match(match_id: int):
-    current_user = Depends(admin_required),
+async def start_match(match_id: int, 
+    current_user = Depends(admin_required)):
     # Check if the match exists
     existing = await database.fetch_one(matches.select().where(matches.c.id == match_id))
     if not existing:
@@ -556,8 +556,8 @@ async def start_match(match_id: int):
 
 
 @app.post("/schedule/{match_id}/complete")
-async def complete_match(match_id: int, body: WinnerBody):
-    current_user = Depends(admin_required),
+async def complete_match(match_id: int, body: WinnerBody,
+    current_user = Depends(admin_required)):
     # update DB
     query = (
         matches.update()
@@ -581,8 +581,8 @@ async def complete_match(match_id: int, body: WinnerBody):
     raise HTTPException(status_code=404, detail="Match not found")
 
 @app.delete("/schedule/{match_id}")
-async def delete_match_and_scores(match_id: int):
-    current_user = Depends(admin_required),
+async def delete_match_and_scores(match_id: int,
+    current_user = Depends(admin_required)):
     existing = await database.fetch_one(matches.select().where(matches.c.id == match_id))
     if not existing:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -596,8 +596,8 @@ async def delete_match_and_scores(match_id: int):
 
 
 @app.post("/players")
-async def create_player(player: Player):
-    current_user = Depends(admin_required),
+async def create_player(player: Player,
+    current_user = Depends(admin_required)):
     query = players.insert().values(
         name=player.name,
         year=player.year,
@@ -613,16 +613,16 @@ async def get_players():
 
 
 @app.put("/players/{player_id}")
-async def update_player(player_id: int, payload: dict):
-    current_user = Depends(admin_required),
+async def update_player(player_id: int, payload: dict,
+    current_user = Depends(admin_required)):
     query = players.update().where(players.c.id == player_id).values(**payload)
     await database.execute(query)
     return {"message": "Player updated"}
 
 
 @app.delete("/players/{player_id}")
-async def delete_player(player_id: int):
-    current_user = Depends(admin_required),
+async def delete_player(player_id: int,
+    current_user = Depends(admin_required)):
     query = players.delete().where(players.c.id == player_id)
     result = await database.execute(query)
 
@@ -636,8 +636,8 @@ def get_livescore():
     return live_scores
 
 @app.post("/scores/{score_id}/start")
-async def start_score(score_id: int, body: StartScorePayload):
-    current_user = Depends(admin_required),
+async def start_score(score_id: int, body: StartScorePayload,
+    current_user = Depends(admin_required)):
     # fetch the row
     row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
@@ -684,8 +684,8 @@ async def start_score(score_id: int, body: StartScorePayload):
         "score": _score_row_to_dict(updated),
     }
 @app.post("/scores/{score_id}/complete")
-async def complete_score(score_id: int, body: CompleteScorePayload):
-    current_user = Depends(admin_required),
+async def complete_score(score_id: int, body: CompleteScorePayload,
+    current_user = Depends(admin_required)):
     row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
     if not row:
         raise HTTPException(status_code=404, detail="Score row not found")
@@ -717,8 +717,8 @@ async def get_scores_by_id(scores_id: int):
 
 
 @app.put("/scores/{scores_id}")
-async def update_scores(scores_id: int, scores_data: UpdateScore):
-    current_user = Depends(admin_required),
+async def update_scores(scores_id: int, scores_data: UpdateScore, 
+    current_user = Depends(admin_required)):
     # build the fields we actually want to update
     values = {}
 
@@ -765,8 +765,8 @@ async def update_scores(scores_id: int, scores_data: UpdateScore):
     }
 
 @app.delete("/scores/{scores_id}")
-async def delete_scores(scores_id: int):
-    current_user = Depends(admin_required),
+async def delete_scores(scores_id: int, 
+    current_user = Depends(admin_required)):
     exists = await database.fetch_one(select(scores_tbl.c.id).where(scores_tbl.c.id == scores_id))
     if not exists:
         raise HTTPException(status_code=404, detail="scores not found")
@@ -787,9 +787,7 @@ async def get_scores_by_match(match_id: int):
 
 
 @app.post("/scores/match/{match_id}/complete")
-async def complete_scores_match(match_id: int, winner: Literal["team", "opponent"]):
-    # Fetch all scores for the given match_id
-    current_user = Depends(admin_required),
+async def complete_scores_match(match_id: int, winner: Literal["team", "opponent"],  current_user = Depends(admin_required)):
     scores_query = scores_tbl.select().where(scores_tbl.c.match_id == match_id)
     scores_list = await database.fetch_all(scores_query)
 
