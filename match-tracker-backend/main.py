@@ -443,7 +443,13 @@ async def create_match( match: Match):
         match_number=match.match_number,
         winner=match.winner  # Add winner field
     )
-    new_id = await database.execute(query)
+    print("before try")
+    try:
+        new_id = await database.execute(query)
+    except Exception as e:
+        print("ERROR CREATING MATCH:", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    
     return {"id": new_id, "message": "Match created"}
 
 @app.get("/schedule")
