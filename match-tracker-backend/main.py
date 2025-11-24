@@ -699,31 +699,53 @@ async def start_score(score_id: int, body: StartScorePayload):
         "message": "Score started",
         "score": _score_row_to_dict(updated),
     }
+# helper – make sure this returns STR, not int
+def _coerce_winner(winner):
+    # frontend sends: "team" | "opponent" | "unfinished"
+    if winner in ("team", "1", 1):
+        return "1"          # string
+    if winner in ("opponent", "2", 2):
+        return "2"          # string
+    return None             # unfinished / no winner yet
+
 @app.post("/scores/{score_id}/complete")
-async def complete_score(score_id: int, body: CompleteScorePayload):
-    current_user = Depends(admin_required)
-    row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
+async def complete_score(
+    score_id: int,
+    body: CompleteScorePayload,
+    current_user=Depends(admin_required),  # make sure Depends is here
+):
+    row = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == score_id)
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Score row not found")
 
-    winner_val = _coerce_winner(body.winner)
+    winner_val = _coerce_winner(body.winner)  # this is now "1", "2", or None
 
     # Optional guard: block completing already completed/cancelled rows
     if str(row["status"]).lower() in ("completed", "cancelled"):
-        # You can switch to 200 idempotent if you prefer
-        raise HTTPException(status_code=409, detail=f"Cannot complete a {row['status']} score")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot complete a {row['status']} score",
+        )
 
     await database.execute(
         update(scores_tbl)
         .where(scores_tbl.c.id == score_id)
-        .values(status="completed", winner=winner_val)
+        .values(
+            status="completed",
+            winner=winner_val,   # string or None, no more ints
+        )
     )
 
-    updated = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == score_id))
+    updated = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == score_id)
+    )
     return {
         "message": "Score completed",
         "score": _score_row_to_dict(updated),
     }
+
 @app.get("/scores/{scores_id}")
 async def get_scores_by_id(scores_id: int):
     row = await database.fetch_one(select(scores_tbl).where(scores_tbl.c.id == scores_id))
