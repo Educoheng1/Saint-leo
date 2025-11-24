@@ -709,18 +709,16 @@ def _coerce_winner(winner):
     return None             # unfinished / no winner yet
 
 @app.post("/scores/{score_id}/complete")
-async def complete_score(
-    score_id: int,
-    body: CompleteScorePayload,
-    current_user=Depends(admin_required),  # make sure Depends is here
-):
+async def complete_score(score_id: int, body: CompleteScorePayload):
+    # (no Depends here now, behaves like your old version)
+
     row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
     )
     if not row:
         raise HTTPException(status_code=404, detail="Score row not found")
 
-    winner_val = _coerce_winner(body.winner)  # this is now "1", "2", or None
+    winner_val = _coerce_winner(body.winner)  # "1", "2", or None
 
     # Optional guard: block completing already completed/cancelled rows
     if str(row["status"]).lower() in ("completed", "cancelled"):
@@ -734,7 +732,7 @@ async def complete_score(
         .where(scores_tbl.c.id == score_id)
         .values(
             status="completed",
-            winner=winner_val,   # string or None, no more ints
+            winner=winner_val,
         )
     )
 
