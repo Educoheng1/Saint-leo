@@ -137,6 +137,28 @@ async function getRosterByGender(gender) {
 // ---------- UI bits
 function MatchCard({ match, isAdmin, onDelete }) {
   const navigate = useNavigate();
+
+  const isCompleted =
+    String(match.status).toLowerCase() === "completed";
+
+  // OPTIONAL: translate winner into a nice label
+  let winnerLabel = null;
+  if (isCompleted) {
+    if (
+      match.winner === "saint_leo" ||
+      match.winner === "home" ||
+      match.winner === 1
+    ) {
+      winnerLabel = "Saint Leo";
+    } else if (
+      match.winner === "opponent" ||
+      match.winner === "away" ||
+      match.winner === 2
+    ) {
+      winnerLabel = match.opponent || "Opponent";
+    }
+  }
+
   return (
     <div className="sl-card" style={{ padding: 14 }}>
       <div
@@ -151,9 +173,25 @@ function MatchCard({ match, isAdmin, onDelete }) {
         <img src="/saint-leo-logo.png" alt="Saint Leo" style={{ height: 22 }} />
         <span>{`Saint Leo vs ${match.opponent || "TBD"}`}</span>
       </div>
+
+      {/* date / location */}
       <div style={{ color: "#4f6475", marginTop: 4 }}>
         {fmtDate(match.date)} {match.location ? `• ${match.location}` : ""}
       </div>
+
+      {/* NEW: result line for completed matches */}
+      {isCompleted && (
+        <div style={{ marginTop: 4, color: "#123", fontSize: 14 }}>
+          <strong>
+            {winnerLabel ? `${winnerLabel} won` : "Final"}{" "}
+            {typeof match.saint_leo_points === "number" &&
+            typeof match.opponent_points === "number"
+              ? `(${match.saint_leo_points}–${match.opponent_points})`
+              : null}
+          </strong>
+        </div>
+      )}
+
       <div
         style={{
           marginTop: 10,
@@ -162,7 +200,7 @@ function MatchCard({ match, isAdmin, onDelete }) {
           flexWrap: "wrap",
         }}
       >
-        {String(match.status).toLowerCase() === "completed" && (
+        {isCompleted && (
           <button
             className="sl-view-btn"
             onClick={() => navigate(`/boxscore/${match.id}`)}
@@ -188,6 +226,7 @@ function MatchCard({ match, isAdmin, onDelete }) {
     </div>
   );
 }
+
 
 function RosterPanel({ roster }) {
   if (!roster?.length)

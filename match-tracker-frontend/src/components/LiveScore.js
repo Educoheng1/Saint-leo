@@ -238,23 +238,43 @@ function computeDualScore(rows) {
   let teamUnits = 0,
     oppUnits = 0;
 
-  for (const r of rows) {
-    const status = String(r?.status ?? "").toLowerCase();
+  for (const r of rows || []) {
+    // use completed lines only (case-insensitive)
+    const status = String(r?.status ?? "").toLowerCase().trim();
     if (status !== "completed") continue;
 
-    const type = String(r?.match_type ?? r?.type ?? "").toLowerCase();
-    const units = type === "doubles" ? 1 : 2; // doubles=0.5 (1 unit), singles=1 (2 units)
+    // doubles = 0.5 pt, singles = 1 pt (2 units = 1 pt)
+    const type = String(r?.match_type ?? r?.type ?? "")
+      .toLowerCase()
+      .trim();
+    const units = type === "doubles" ? 1 : 2;
 
-    const winner = String(r?.winner ?? "").toLowerCase();
+    // normalize winner from all possible formats
+    const rawWinner = r?.winner;
+    const w = String(rawWinner ?? "").toLowerCase().trim();
+
+    let winner = "";
+    if (w === "team" || w === "0") {
+      winner = "team";
+    } else if (w === "opponent" || w === "1") {
+      winner = "opponent";
+    }
+
     if (winner === "team") teamUnits += units;
     else if (winner === "opponent") oppUnits += units;
   }
 
+  // keep your original behavior (ints only)
   return {
     team: Math.floor(teamUnits / 2),
     opp: Math.floor(oppUnits / 2),
   };
+
+  // If later you want to SEE 0.5 for doubles, use this instead:
+  // return { team: teamUnits / 2, opp: oppUnits / 2 };
 }
+
+
 
 /* One full block: header + doubles + singles for ONE match */
 function MatchBlock({ match, rows }) {

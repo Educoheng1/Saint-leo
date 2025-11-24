@@ -168,7 +168,7 @@ function StatusPill({ status }) {
   );
 }
 
-function EditLineModal({ open, onClose, value, onChange, onSave }) {
+function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) {
   const [winner, setWinner] = React.useState("unfinished"); // "team" | "opponent" | "unfinished"
 
   React.useEffect(() => {
@@ -218,8 +218,9 @@ function EditLineModal({ open, onClose, value, onChange, onSave }) {
   async function handleComplete() {
     const res = await completeScoreLine(r.id, winner);
     if (res?.score) {
-      onChange(res.score); // refresh row in UI
-      onClose(); // close modal
+      onChange(res.score);          // keep modal draft in sync
+      onRowChange?.(res.score);     // update parent rows
+      onClose();
     }
   }
 
@@ -281,54 +282,85 @@ function EditLineModal({ open, onClose, value, onChange, onSave }) {
 
           <Row>
             <Field label="Team Player(s)">
-              <input
-                value={
-                  isDoubles
-                    ? `${r.player1 || ""}${
-                        r.player2 ? ` & ${r.player2}` : ""
-                      }`
-                    : r.player1 || ""
-                }
-                onChange={(e) => {
-                  const txt = e.target.value;
-                  if (isDoubles && txt.includes("&")) {
-                    const [p1, p2] = txt.split("&").map((s) => s.trim());
-                    onChange({ player1: p1, player2: p2 });
-                  } else {
-                    onChange({
-                      player1: txt,
-                      player2: isDoubles ? r.player2 || "" : "",
-                    });
-                  }
-                }}
-                placeholder={isDoubles ? "John & Jack" : "John"}
-                disabled={!isScheduled} // lock after live
-              />
+              {isDoubles ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <input
+                    value={r.player1 || ""}
+                    onChange={(e) => onChange({ player1: e.target.value })}
+                    placeholder="Eduardo"
+                    disabled={!isScheduled} // lock after live
+                    className="sl-input"
+                    style={{ flex: 1 }}
+                  />
+                  <span>&</span>
+                  <input
+                    value={r.player2 || ""}
+                    onChange={(e) => onChange({ player2: e.target.value })}
+                    placeholder="Luis"
+                    disabled={!isScheduled}
+                    className="sl-input"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              ) : (
+                <input
+                  value={r.player1 || ""}
+                  onChange={(e) => onChange({ player1: e.target.value })}
+                  placeholder="Singles Player"
+                  disabled={!isScheduled}
+                  className="sl-input"
+                />
+              )}
             </Field>
+
             <Field label="Opponent(s)">
-              <input
-                value={
-                  isDoubles
-                    ? `${r.opponent1 || ""}${
-                        r.opponent2 ? ` & ${r.opponent2}` : ""
-                      }`
-                    : r.opponent1 || ""
-                }
-                onChange={(e) => {
-                  const txt = e.target.value;
-                  if (isDoubles && txt.includes("&")) {
-                    const [o1, o2] = txt.split("&").map((s) => s.trim());
-                    onChange({ opponent1: o1, opponent2: o2 });
-                  } else {
-                    onChange({
-                      opponent1: txt,
-                      opponent2: isDoubles ? r.opponent2 || "" : "",
-                    });
+              {isDoubles ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <input
+                    value={r.opponent1 || ""}
+                    onChange={(e) =>
+                      onChange({ opponent1: e.target.value })
+                    }
+                    placeholder="Opp 1"
+                    disabled={!isScheduled}
+                    className="sl-input"
+                    style={{ flex: 1 }}
+                  />
+                  <span>&</span>
+                  <input
+                    value={r.opponent2 || ""}
+                    onChange={(e) =>
+                      onChange({ opponent2: e.target.value })
+                    }
+                    placeholder="Opp 2"
+                    disabled={!isScheduled}
+                    className="sl-input"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              ) : (
+                <input
+                  value={r.opponent1 || ""}
+                  onChange={(e) =>
+                    onChange({ opponent1: e.target.value })
                   }
-                }}
-                placeholder={isDoubles ? "Opp A & Opp B" : "Opp A"}
-                disabled={!isScheduled} // lock after live
-              />
+                  placeholder="Opponent"
+                  disabled={!isScheduled}
+                  className="sl-input"
+                />
+              )}
             </Field>
           </Row>
 
@@ -1030,12 +1062,15 @@ export default function Admin() {
   const openEdit = (matchId, idx) => {
     const src = linesByMatch[matchId]?.[idx];
     if (!src) return;
+  
+    const visible = normalizeSets(src.sets ?? src.setsText, 3);
+  
     setEditing({
       matchId,
       idx,
       draftLine: {
         ...src,
-        sets: ensureSets(src.sets ?? src.setsText),
+        sets: visible.map(s => [s.team, s.opp]),
       },
     });
   };
@@ -1478,17 +1513,25 @@ export default function Admin() {
 
                 {/* shared edit modal for any match/line */}
                 <EditLineModal
-                  open={editingOpen}
-                  value={editing.draftLine || {}}
-                  onClose={closeEdit}
-                  onChange={(patch) =>
-                    setEditing((prev) => ({
-                      ...prev,
-                      draftLine: { ...prev.draftLine, ...patch },
-                    }))
-                  }
-                  onSave={commitEdit}
-                />
+  open={editingOpen}
+  value={editing.draftLine || {}}
+  onClose={closeEdit}
+  onChange={(patch) =>
+    setEditing((prev) => ({
+      ...prev,
+      draftLine: { ...prev.draftLine, ...patch },
+    }))
+  }
+  onRowChange={(updatedRow) => {
+    setLinesByMatch((prev) => ({
+      ...prev,
+      [editing.matchId]: (prev[editing.matchId] || []).map((r, i) =>
+        i === editing.idx ? { ...r, ...updatedRow } : r
+      ),
+    }));
+  }}
+  onSave={commitEdit}
+/>
               </div>
             ) : (
               <div className="sl-card sl-empty">

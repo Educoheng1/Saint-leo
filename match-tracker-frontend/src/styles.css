@@ -404,19 +404,18 @@
     width: auto;
   }
   .back-button {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    background-color: transparent;
-    color: #006341;
-    border: 2px solid #006341;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 16px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #174d2a;
+    background: transparent;
+    color: #174d2a;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
-    z-index: 999;
+  
+    /* IMPORTANT: no absolute positioning */
+    position: static; /* or just delete the position line entirely */
   }
+  
   
   .back-button:hover {
     background-color: #006341;
