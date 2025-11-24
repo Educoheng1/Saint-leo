@@ -362,7 +362,7 @@ export default function Schedule() {
         opponent: newMatch.opponent,
         location: newMatch.location,
         status: "scheduled",
-        match_number: Date.now(),
+        match_number: Math.floor(Date.now() / 1000),
         winner: null,
       };
       const response = await fetch(`${API_BASE_URL}/schedule`, {

@@ -1190,7 +1190,7 @@ export default function Admin() {
       opponent: mForm.opponent,
       location: mForm.venue,
       status: mForm.status || "scheduled",
-      match_number: Date.now(),
+      match_number: Math.floor(Date.now() / 1000),
       winner: null,
     };
     const res = await createMatch(body);
