@@ -46,7 +46,7 @@ app.add_middleware(
         "http://localhost:3000",  # Local React development server
         "http://127.0.0.1:3000",  # Alternative localhost
         "https://saint-leo-live-scores.onrender.com", 
-         "https://saint-leo-live-score.onrender.com",
+        "https://saint-leo-live-score.onrender.com",
     ],
     allow_credentials=True,  # Correct argument name
     allow_methods=["*"],  # Allow all HTTP methods
@@ -570,31 +570,41 @@ async def start_match(match_id: int):
 
     return {"message": f"Match {match_id} started and scores created successfully"}
 
-
 @app.post("/schedule/{match_id}/complete")
 async def complete_match(match_id: int, body: WinnerBody):
+    # This Depends here does nothing – FastAPI won't run it like this.
+    # If you want auth later, we can move it into the function parameters.
     current_user = Depends(admin_required)
-    # update DB
+
+    # Make sure winner is string-friendly for the DB
+    winner_val = body.winner
+    if winner_val is not None:
+        winner_val = str(winner_val)
+
+    # Update the match
     query = (
         matches.update()
         .where(matches.c.id == match_id)
         .values(
             status="completed",
-            winner=body.winner,
+            winner=winner_val,
         )
     )
-    result = await database.execute(query)
+    await database.execute(query)
 
-    if result:
-        updated_match = await database.fetch_one(
-            matches.select().where(matches.c.id == match_id)
-        )
-        return {
-            "message": "Match completed",
-            "match": dict(updated_match) if updated_match else None,
-        }
+    # Now check if the match exists after update
+    updated_match = await database.fetch_one(
+        matches.select().where(matches.c.id == match_id)
+    )
 
-    raise HTTPException(status_code=404, detail="Match not found")
+    if not updated_match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    return {
+        "message": "Match completed",
+        "match": dict(updated_match),
+    }
+
 
 @app.delete("/schedule/{match_id}")
 async def delete_match_and_scores(match_id: int):

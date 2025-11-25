@@ -2,11 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../styles.css";
-
-const API_BASE =
-  import.meta?.env?.VITE_API_BASE ||
-  process.env.VITE_API_BASE ||
-  "http://127.0.0.1:8000";
+import API_BASE_URL from "../config";
 
 const TOKEN = localStorage.getItem("token") || "";
 
@@ -38,8 +34,8 @@ function looksLive(m) {
 async function fetchLiveMatch() {
   // Try dedicated endpoints first
   for (const url of [
-    `${API_BASE}/schedule?status=live`,
-    `${API_BASE}/schedule?status=Live`,
+    `${API_BASE_URL}/schedule?status=live`,
+    `${API_BASE_URL}/schedule?status=Live`,
   ]) {
     const d = await fetchJSON(url);
     if (!d) continue;
@@ -51,7 +47,7 @@ async function fetchLiveMatch() {
       // hydrate each match with full details if possible
       const full = [];
       for (const m of lives) {
-        const details = await fetchJSON(`${API_BASE}/schedule/${m.id}`);
+        const details = await fetchJSON(`${API_BASE_URL}/schedule/${m.id}`);
         full.push(details || m);
       }
       return full; // ARRAY OF LIVE MATCHES
@@ -59,7 +55,7 @@ async function fetchLiveMatch() {
   }
 
   // Fallback: list all and filter
-  const all = await fetchJSON(`${API_BASE}/schedule`);
+  const all = await fetchJSON(`${API_BASE_URL}/schedule`);
   if (Array.isArray(all)) {
     const lives = all.filter(looksLive);
     if (lives.length) {
@@ -74,9 +70,9 @@ async function fetchLiveMatch() {
 async function fetchUpcomingMatch() {
   // Prefer scheduled; otherwise pick nearest future non-completed
   for (const url of [
-    `${API_BASE}/schedule?status=scheduled`,
-    `${API_BASE}/schedule/upcoming`,
-    `${API_BASE}/schedule`,
+    `${API_BASE_URL}/schedule?status=scheduled`,
+    `${API_BASE_URL}/schedule/upcoming`,
+    `${API_BASE_URL}/schedule`,
   ]) {
     const d = await fetchJSON(url);
     if (!d) continue;
