@@ -1,5 +1,6 @@
 import React from "react";
 import "../styles.css";
+import Footer from "./components/Footer";
 import { useAdmin } from "../AdminContext"; // <-- import the admin context
 
 export default function BoxScore({ match, onClose }) {
@@ -30,6 +31,7 @@ export default function BoxScore({ match, onClose }) {
           </li>
         ))}
       </ul>
+      <Footer />
     </div>
   );
 }

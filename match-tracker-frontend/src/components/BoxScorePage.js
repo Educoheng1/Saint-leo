@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import BackButton from "../components/BackButton";
+import Footer from "./Footer";
+
 import API_BASE_URL from "../config";
 
 export default function BoxScorePage() {
@@ -454,6 +456,7 @@ function getTeamWinner(match) {
           </>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

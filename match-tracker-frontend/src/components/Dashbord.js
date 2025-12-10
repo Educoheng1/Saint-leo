@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../styles.css";
 import API_BASE_URL from "../config";
+import Footer from "./Footer";
+import TopNav from "./Topnav";
+import { useAuth } from "../AuthContext";
+
+
 
 const TOKEN = localStorage.getItem("token") || "";
 
@@ -118,54 +123,6 @@ const fmtDate = (iso) =>
         minute: "2-digit",
       })
     : "TBD";
-
-function TopNav({ name, hasLive }) {
-  return (
-    <header className="sl-topnav">
-      <div className="sl-brand">
-        <img src="/saint-leo-logo.png" alt="Saint Leo" />
-        <div className="sl-brand-text">
-          <span className="sl-brand-title">Saint Leo</span>
-          <span className="sl-brand-sub">Tennis</span>
-        </div>
-      </div>
-
-      <nav className="sl-navlinks">
-        <Link to="/dashboard" className="sl-navlink">
-          Dashboard
-        </Link>
-        <Link to="/schedule" className="sl-navlink">
-          Schedule
-        </Link>
-        <Link to="/players" className="sl-navlink">
-          Roster
-        </Link>
-        {hasLive && (
-          <Link to="/livescore" className="sl-navlink sl-navlink-accent">
-            Live Scores
-          </Link>
-        )}
-        {/* Donate – external link in nav */}
-        <a
-          href="https://ets.rocks/4o1T9nO"
-          target="_blank"
-          rel="noreferrer"
-          className="sl-navlink sl-navlink-donate"
-        >
-          Donate
-        </a>
-        <Link to="/admin" className="sl-navlink">
-          Admin Panel
-        </Link>
-      </nav>
-
-      <div className="sl-userbox">
-        <span className="sl-username">{name}</span>
-      </div>
-    </header>
-  );
-}
-
 export default function Dashbord() {
   const navigate = useNavigate();
   const guestName = localStorage.getItem("guestName") || "Guest";
@@ -173,7 +130,13 @@ export default function Dashbord() {
   const [liveMatches, setLiveMatches] = useState([]); // ARRAY
   const [nextMatch, setNextMatch] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
+  const displayName = user
+    ? (user.first_name || user.last_name
+        ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+        : user.email)
+    : "Guest";
   const hasLive = liveMatches.length > 0;
   const { d, h, m, s } = useCountdown(nextMatch?.date);
 
@@ -196,6 +159,7 @@ export default function Dashbord() {
       }
       setLoading(false);
     })();
+
 
     const t = setInterval(async () => {
       const lm = await fetchLiveMatch();
@@ -223,7 +187,7 @@ export default function Dashbord() {
       <TopNav name={guestName} hasLive={hasLive} />
 
       <main className="sl-main">
-        <h1 className="sl-welcome">Welcome back, {guestName}!</h1>
+      <h1 className="sl-welcome">Welcome back, {displayName}!</h1>
         <p className="sl-subtitle">Saint Leo Lions Tennis Team Dashboard</p>
 
         {loading ? (
@@ -353,8 +317,13 @@ export default function Dashbord() {
               Donate Now
             </a>
           </div>
+
         </section>
       </main>
+      <div className="App">
+  {/* your routes or pages */}
+  <Footer />
+</div>
     </div>
   );
 }

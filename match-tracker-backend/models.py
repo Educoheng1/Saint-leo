@@ -29,11 +29,17 @@ matches = Table(
 
 players = Table(
     "players",
-    metadata,  # <-- same metadata used for your other tables
+    metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", String, nullable=False),     # make this required
-    Column("gender", String, nullable=False),   # required (matches your insert)
-    Column("year", String, nullable=True),      # FR/SO/JR/SR or 1–4
+    Column("name", String, nullable=False),        # required
+    Column("gender", String, nullable=False),      # required
+    Column("year", String, nullable=True),         # FR/SO/JR/SR or 1–4
+
+    # New record/stat columns
+    Column("doubles_all_time", Integer, nullable=True),
+    Column("doubles_season", Integer, nullable=True),
+    Column("singles_season", Integer, nullable=True),
+    Column("singles_all_time", Integer, nullable=True),
 )
 
 
@@ -101,5 +107,7 @@ users = sa.Table(
     sa.Column("id", sa.Integer, primary_key=True),
     sa.Column("email", sa.String, nullable=False, unique=True, index=True),
     sa.Column("password_hash", sa.String, nullable=False),
+    sa.Column("first_name", sa.String, nullable=False),
+    sa.Column("last_name", sa.String, nullable=False),
     sa.Column("role", sa.String, nullable=False, server_default="user"),  # "admin" or "user"
 )

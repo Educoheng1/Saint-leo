@@ -6,8 +6,6 @@ import LiveScore from "./components/LiveScore";
 import Admin from "./Admin";
 import BoxScorePage from "./components/BoxScorePage";
 import Dashboard from "./components/Dashbord";
-
-import Header from "./components/Header";
 import { AuthProvider, useAuth } from "./AuthContext";
 
 // This component holds the routes and uses auth state
@@ -21,7 +19,6 @@ function AppRoutes() {
 
   return (
     <>
-      <Header />
 
       <Routes>
         <Route path="/" element={<Dashboard />} />

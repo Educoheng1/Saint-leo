@@ -496,12 +496,7 @@
     margin-top: 8px;
   }
   
-  /* Top bar */
-.sl-topnav {
-  position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: #f8fff8; border-bottom: 1px solid #e3f2e3;
-}
+  
 
 .sl-brand { display: flex; align-items: center; gap: 10px; }
 .sl-brand img { height: 34px; width: 34px; border-radius: 6px; }
@@ -962,39 +957,6 @@
   font-weight: 700;
   text-decoration: none;
 }
-/* ---------- MOBILE DASHBOARD NAV FIX ---------- */
-@media (max-width: 768px) {
-  .sl-topnav {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 12px 16px;
-  }
-
-  .sl-brand {
-    margin-bottom: 4px;
-  }
-
-  .sl-navlinks {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;           /* allow items to go to 2 lines */
-    gap: 8px 12px;
-    justify-content: flex-start;
-    font-size: 0.85rem;        /* a bit smaller on phone */
-  }
-
-  .sl-navlink,
-  .sl-navlink-accent,
-  .sl-navlink-donate {
-    padding: 4px 8px;
-  }
-
-  .sl-userbox {
-    align-self: flex-end;
-    font-size: 0.8rem;
-  }
-}
 .sl-live-list {
   display: flex;
   flex-direction: column;
@@ -1026,4 +988,354 @@
 }
 .ls-match-block {
   margin-bottom: 24px;
+}
+@media (max-width: 480px) {
+  .edit-line-card {
+    padding: 12px;
+  }
+
+  .edit-line-doubles-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-line-doubles-row input {
+    width: 100%;
+  }
+}
+.app-footer {
+  margin-top: 48px;
+  padding: 16px 0 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #2f5b3a;              /* Saint Leo–ish green text */
+  background: #f7fff7;         /* very light green like your page bg */
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.app-footer strong {
+  font-weight: 600;
+}
+
+.footer-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #0c8c4f;         /* same vibe as the green gradient */
+  margin-right: 8px;
+  position: relative;
+  top: -1px;
+}
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e1e7e4;
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-logo {
+  font-size: 20px;
+}
+
+.navbar-main-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.navbar-sub-title {
+  font-size: 11px;
+  color: #6b7a6f;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+}
+
+.navbar-links a {
+  text-decoration: none;
+  color: #2f5b3a;
+}
+
+.navbar-links a:hover {
+  text-decoration: underline;
+}
+
+/* hamburger hidden on desktop */
+.navbar-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 28px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.navbar-burger span {
+  height: 2px;
+  width: 100%;
+  background: #2f5b3a;
+  border-radius: 999px;
+}
+
+/* mobile menu */
+.navbar-mobile-menu {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background: #f7fff7;
+  border-bottom: 1px solid #e1e7e4;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 16px 12px;
+  gap: 8px;
+}
+
+.navbar-mobile-menu a {
+  text-decoration: none;
+  color: #2f5b3a;
+  font-size: 14px;
+}
+
+/* responsive behavior */
+@media (max-width: 768px) {
+  .navbar-links {
+    display: none;      /* hide inline links */
+  }
+  .navbar-burger {
+    display: flex;      /* show hamburger */
+  }
+}
+.sl-topnav-center {
+  justify-content: center;
+}
+/* base top bar */
+/* base top bar */
+.sl-topnav {
+  background: #ffffff;
+  border-bottom: 1px solid #e3e6e8;
+  padding: 8px 16px 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  z-index: 10;
+}
+
+/* top row */
+.sl-topnav-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* brand */
+.sl-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sl-brand-logo {
+  height: 28px;
+  width: auto;
+}
+
+.sl-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.sl-brand-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #123524;
+}
+
+.sl-brand-sub {
+  font-size: 0.8rem;
+  color: #2e7d32;
+}
+
+/* right side */
+.sl-topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sl-username {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+/* burger button */
+.sl-burger {
+  display: none; /* desktop – hidden */
+  background: #0c8c4f;        /* donate green vibe */
+  border: none;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 18px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+/* desktop nav */
+.sl-navlinks-desktop {
+  display: flex;
+  gap: 16px;
+  font-size: 0.9rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.sl-navlink {
+  text-decoration: none;
+  color: #124620;
+  padding: 4px 10px;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sl-navlink:hover {
+  background: #f1f6f3;
+}
+
+.sl-navlink-accent {
+  color: #0b63ce;
+  font-weight: 600;
+}
+
+.sl-navlink-donate {
+  color: #0c8c4f;
+  font-weight: 600;
+}
+
+/* full-screen mobile overlay */
+.sl-nav-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0c8c4f;           /* strong green */
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.sl-navlinks-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 260px;
+}
+
+.sl-navlink-mobile {
+  text-decoration: none;
+  color: #ffffff;
+  font-size: 1.1rem;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  text-align: center;
+}
+
+.sl-navlink-mobile-accent {
+  border-color: #ffffff;
+  font-weight: 600;
+}
+
+.sl-navlink-mobile-donate {
+  background: #ffffff;
+  color: #0c8c4f;
+  font-weight: 700;
+}
+
+/* mobile behavior */
+@media (max-width: 768px) {
+  .sl-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sl-navlinks-desktop {
+    display: none;   /* hide normal bar on phone */
+  }
+}
+
+/* desktop behavior */
+@media (min-width: 769px) {
+  .sl-nav-overlay {
+    display: none;   /* overlay never used on desktop */
+  }
+
+  .sl-burger {
+    display: none;
+  }
+
+  .sl-navlinks-desktop {
+    display: flex;
+  }
+}
+.sl-topnav-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sl-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sl-brand-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.sl-topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;          /* smaller gap */
+  white-space: nowrap;
+}
+
+
+
+.sl-login-btn {
+  background: #174d2a;
+  color: white;
+  padding: 4px 10px;         /* smaller padding */
+  border-radius: 999px;
+  border: none;
+  font-size: 12px;           /* smaller font */
+  font-weight: 500;
+  line-height: 1;            /* prevents 2-line wrap */
+  white-space: nowrap;       /* forces one-line text */
 }

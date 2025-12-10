@@ -2,38 +2,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "../styles.css";
+import Footer from "./Footer";
+import TopNav from "./Topnav";
 import { useAuth } from "../AuthContext";
 import API_BASE_URL from "../config";
 
-// ------------ Top Nav (same look as Schedule/Dashboard)
-function TopNav({ hasLive }) {
-  const { user, logout } = useAuth();
-  const displayName = user ? user.email : "Guest";
-
-  return (
-    <header className="sl-topnav">
-      <div className="sl-brand">
-        <img src="/saint-leo-logo.png" alt="Saint Leo" />
-        <div className="sl-brand-text">
-          <span className="sl-brand-title">Saint Leo</span>
-          <span className="sl-brand-sub">Tennis</span>
-        </div>
-      </div>
-
-      <nav className="sl-navlinks">
-        <Link to="/dashboard" className="sl-navlink">Dashboard</Link>
-        <Link to="/players" className="sl-navlink sl-navlink-accent">Roster</Link>
-        <Link to="/schedule" className="sl-navlink">Schedule</Link>
-        {hasLive && <Link to="/livescore" className="sl-navlink">Live Scores</Link>}
-        <Link to="/admin" className="sl-navlink">Admin Panel</Link>
-      </nav>
-
-      <div className="sl-userbox">
-        <span className="sl-username">{displayName}</span>
-      </div>
-    </header>
-  );
-}
 
 // ------------ helpers
 const normGender = (g) => {
@@ -438,6 +411,7 @@ export default function PlayerList() {
           </div>
         )}
       </div>
+      <Footer />
     </>
   );
 }

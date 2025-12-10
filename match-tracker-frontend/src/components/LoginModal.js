@@ -7,13 +7,17 @@ const API_BASE =
     ? "http://localhost:8000"
     : "https://saint-leo-live-score.onrender.com";
 
-
 export default function LoginModal({ onClose }) {
   const { login } = useAuth();
   const [mode, setMode] = useState("login"); // "login" or "register"
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false); // if you want to register admins manually
+
+  // NEW: first + last name for registration
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -40,8 +44,7 @@ export default function LoginModal({ onClose }) {
       }
 
       const data = await res.json();
-      // data = { access_token, token_type, user: { id, email, role } }
-
+      // data = { access_token, token_type, user: { id, email, role, ... } }
       login(data.access_token, data.user);
       onClose();
     } catch (err) {
@@ -64,7 +67,9 @@ export default function LoginModal({ onClose }) {
         body: JSON.stringify({
           email,
           password,
-          role: isAdmin ? "admin" : "user",
+          first_name: firstName,
+          last_name: lastName,
+          // no role here – backend will default to "user"
         }),
       });
 
@@ -73,8 +78,7 @@ export default function LoginModal({ onClose }) {
         throw new Error(data.detail || "Registration failed");
       }
 
-      // Registration successful: auto-login or ask user to switch tab
-      // Easiest: auto-login right away:
+      // after successful register, log in with same credentials
       await handleLogin(e);
     } catch (err) {
       setError(err.message);
@@ -151,6 +155,46 @@ export default function LoginModal({ onClose }) {
         </div>
 
         <form onSubmit={mode === "login" ? handleLogin : handleRegister}>
+          {mode === "register" && (
+            <>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>
+                  First name
+                </label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={e => setFirstName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>
+                  Last name
+                </label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={e => setLastName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                  }}
+                  required
+                />
+              </div>
+            </>
+          )}
+
           <div style={{ marginBottom: 10 }}>
             <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>Email</label>
             <input
@@ -183,19 +227,7 @@ export default function LoginModal({ onClose }) {
             />
           </div>
 
-          {mode === "register" && (
-            <div style={{ marginBottom: 10, fontSize: 13 }}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={isAdmin}
-                  onChange={e => setIsAdmin(e.target.checked)}
-                  style={{ marginRight: 6 }}
-                />
-                Register as admin (for now, manual use only)
-              </label>
-            </div>
-          )}
+          {/* admin checkbox REMOVED */}
 
           {error && (
             <div style={{ color: "red", fontSize: 13, marginBottom: 8 }}>

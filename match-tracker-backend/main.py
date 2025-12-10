@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 # Pydantic
-from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import BaseModel, Field, validator, EmailStr, field_validator
 
 # SQLAlchemy
 import sqlalchemy as sa
@@ -55,10 +55,11 @@ app.add_middleware(
 
 
 class RegisterUser(BaseModel):
-    email: EmailStr
-    password: str
-    role: str = "user"
-
+  email: EmailStr
+  password: str
+  first_name: str
+  last_name: str
+  
 class Match(BaseModel):
     date: str  # or datetime if you use from datetime import datetime
     gender: str
@@ -70,9 +71,20 @@ class Match(BaseModel):
 
 class Player(BaseModel):
     name: str
-    gender: Literal["men","women"] | str
-    year: Optional[str] = None 
+    gender: Literal["men", "women"]
+    year: Optional[str] = None
 
+    doubles_all_time: Optional[int] = None
+    doubles_season: Optional[int] = None
+    singles_season: Optional[int] = None
+    singles_all_time: Optional[int] = None
+
+    model_config = {"extra": "ignore"}  # ignore unknown fields
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def empty_string_to_none(cls, v):
+        return None if v == "" else v
 
 class ScoreBox(BaseModel):
     match_id: int
@@ -232,9 +244,10 @@ def admin_required(current_user = Depends(get_current_user)):
     return current_user
 
 
+DEFAULT_ROLE = "user"
 
 @app.post("/auth/register")
-async def register_user(payload: RegisterUser, db=Depends(get_db)):
+async def register_user(payload: RegisterUser):
     try:
         # Hash the password
         password_hash = pwd.hash(payload.password)
@@ -242,10 +255,18 @@ async def register_user(payload: RegisterUser, db=Depends(get_db)):
         print("Hashed password during registration:", password_hash)
 
         # Insert the new user into the database
-        query = users.insert().values(email=payload.email, password_hash=password_hash, role=payload.role)
+        query = users.insert().values(
+            email=payload.email,
+            password_hash=password_hash,
+            # only include these if your users table has these columns:
+            first_name=getattr(payload, "first_name", None),
+            last_name=getattr(payload, "last_name", None),
+            role=DEFAULT_ROLE,   # 👈 hardcoded backend-controlled role
+        )
+
         new_user_id = await database.execute(query)
 
-        return {"id": new_user_id, "email": payload.email, "role": payload.role}
+        return {"id": new_user_id, "email": payload.email, "role": DEFAULT_ROLE}
     except IntegrityError:
         raise HTTPException(status_code=400, detail="User with this email already exists")
 
@@ -253,29 +274,37 @@ async def register_user(payload: RegisterUser, db=Depends(get_db)):
 def login(form: OAuth2PasswordRequestForm = Depends(), db=Depends(get_db)):
     print("Raw username repr:", repr(form.username))
 
-    # DEBUG: list all users this app sees
     rows = db.execute(sa.select(users)).mappings().all()
-
 
     clean_username = form.username.strip().lower()
 
-    row = db.execute(
-        sa.select(users).where(func.lower(users.c.email) == clean_username)
-    ).mappings().first()
+    row = (
+        db.execute(
+            sa.select(users).where(func.lower(users.c.email) == clean_username)
+        )
+        .mappings()
+        .first()
+    )
     print("Query result:", row)
 
     if not row:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-
     if not pwd.verify(form.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token = create_access_token(sub=row["id"], role=row["role"])
+
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": row["id"], "email": row["email"], "role": row["role"]},
+        "user": {
+            "id": row["id"],
+            "email": row["email"],
+            "role": row["role"],
+            "first_name": row["first_name"],   # 👈 add
+            "last_name": row["last_name"],     # 👈 add
+        },
     }
 
 
@@ -620,15 +649,21 @@ async def delete_match_and_scores(match_id: int):
 
     return {"message": f"Match {match_id} and its scores deleted successfully"}
 
-
+PLAYER_COLUMNS = {
+    "name", "gender", "year",
+     "doubles_all_time", "doubles_season",
+    "singles_season", "singles_all_time",
+}
 @app.post("/players")
-async def create_player(player: Player):
-    current_user = Depends(admin_required)
-    query = players.insert().values(
-        name=player.name,
-        year=player.year,
-        gender=player.gender, 
-    )
+async def create_player(player: Player, current_user: str = Depends(admin_required)):
+    # Convert missing fields to NULL
+    data = {
+        "name": player.name,
+        "gender": player.gender,
+        "year": player.year if player.year is not None else None,
+    }
+
+    query = players.insert().values(**data)
     new_id = await database.execute(query)
     return {"id": new_id}
 
@@ -639,11 +674,19 @@ async def get_players():
 
 
 @app.put("/players/{player_id}")
-async def update_player(player_id: int, payload: dict):
-    current_user = Depends(admin_required)
-    query = players.update().where(players.c.id == player_id).values(**payload)
+async def update_player(player_id: int, payload: dict, current_user: str = Depends(admin_required)):
+    # Keep ONLY valid columns (avoid "Unconsumed column names" error)
+    clean_payload = {k: (v if v not in ["", None] else None) 
+                     for k, v in payload.items() if k in PLAYER_COLUMNS}
+
+    # If nothing valid was sent → still safe, but does no update
+    if not clean_payload:
+        clean_payload = {"year": None, "gender": None, "name": None}
+
+    query = players.update().where(players.c.id == player_id).values(**clean_payload)
     await database.execute(query)
-    return {"message": "Player updated"}
+
+    return {"message": "Player updated", "updated": clean_payload}
 
 
 @app.delete("/players/{player_id}")

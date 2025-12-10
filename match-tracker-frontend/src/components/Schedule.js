@@ -3,47 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../styles.css";
 import { useAuth } from "../AuthContext";
+import Footer from "./Footer";
+import TopNav from "./Topnav";
 import API_BASE_URL from "../config";
-
-// ---------- Top Nav (same style as Dashboard)
-function TopNav({ hasLive }) {
-  const { user, logout } = useAuth();
-  const displayName = user ? user.email : "Guest";
-
-  return (
-    <header className="sl-topnav">
-      <div className="sl-brand">
-        <img src="/saint-leo-logo.png" alt="Saint Leo" />
-        <div className="sl-brand-text">
-          <span className="sl-brand-title">Saint Leo</span>
-          <span className="sl-brand-sub">Tennis</span>
-        </div>
-      </div>
-
-      <nav className="sl-navlinks">
-        <Link to="/dashboard" className="sl-navlink">
-          Dashboard
-        </Link>
-        <Link to="/players" className="sl-navlink">
-          Roster
-        </Link>
-        <Link to="/schedule" className="sl-navlink sl-navlink-accent">
-          Schedule
-        </Link>
-        <Link to="/livescore" className="sl-navlink">
-          {hasLive ? "Live Scores" : "Scores"}
-        </Link>
-        <Link to="/admin" className="sl-navlink">
-          Admin Panel
-        </Link>
-      </nav>
-
-      <div className="sl-userbox">
-        <span className="sl-username">{displayName}</span>
-      </div>
-    </header>
-  );
-}
 
 // ---------- utils
 const normGender = (g) => {
@@ -102,34 +64,6 @@ async function getMatchesByGender(gender) {
     const filtered = arr.filter((m) => normGender(m.gender) === gender);
     if (u.includes("?gender=")) return filtered;
     if (filtered.length || arr.length) return filtered.length ? filtered : arr;
-  }
-  return [];
-}
-
-async function getRosterByGender(gender) {
-  const urls = [
-    `${API_BASE_URL}/players?gender=${gender}`,
-    `${API_BASE_URL}/players`,
-  ];
-  for (const u of urls) {
-    const d = await fetchJSON(u);
-    if (!d) continue;
-    const arr = Array.isArray(d) ? d : d.items || d.results || [d];
-    const normalized = arr.map((p) => ({
-      id: p.id ?? `${p.first_name || ""}-${p.last_name || ""}-${p.email || ""}`,
-      name:
-        p.full_name ||
-        p.name ||
-        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
-        "Unnamed",
-      gender: normGender(p.gender),
-      year: p.year || p.class || null,
-      hand: p.hand || null,
-    }));
-    const filtered = normalized.filter((p) => p.gender === gender);
-    if (u.includes("?gender=")) return filtered;
-    if (filtered.length || normalized.length)
-      return filtered.length ? filtered : normalized;
   }
   return [];
 }
@@ -228,59 +162,11 @@ function MatchCard({ match, isAdmin, onDelete }) {
 }
 
 
-function RosterPanel({ roster }) {
-  if (!roster?.length)
-    return (
-      <div className="sl-card" style={{ padding: 14 }}>
-        <div
-          style={{ fontWeight: 700, marginBottom: 6, color: "#174d2a" }}
-        >
-          Roster
-        </div>
-        <div style={{ color: "#4f6475" }}>No players found.</div>
-      </div>
-    );
-  return (
-    <div className="sl-card" style={{ padding: 14 }}>
-      <div
-        style={{ fontWeight: 700, marginBottom: 10, color: "#174d2a" }}
-      >
-        Roster
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-          gap: 8,
-        }}
-      >
-        {roster.map((p) => (
-          <div
-            key={p.id}
-            style={{
-              border: "1px solid #e7f0e7",
-              borderRadius: 10,
-              padding: 8,
-            }}
-          >
-            <div style={{ fontWeight: 600, color: "#123" }}>{p.name}</div>
-            <div style={{ color: "#5c6b62", fontSize: 12 }}>
-              {p.year ? `Year: ${p.year}` : ""}{" "}
-              {p.hand ? `• ${p.hand}` : ""}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ---------- Component
 export default function Schedule() {
   const { isAdmin, token } = useAuth();
   const [tab, setTab] = useState("men"); // 'men' | 'women'
   const [matches, setMatches] = useState([]);
-  const [roster, setRoster] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [newMatch, setNewMatch] = useState({
     date: "",
@@ -294,13 +180,11 @@ export default function Schedule() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      const [m, r] = await Promise.all([
-        getMatchesByGender(tab),
-        getRosterByGender(tab),
-      ]);
+      const m = await getMatchesByGender(tab);
+      setMatches(m || []);
+
       if (!mounted) return;
       setMatches(m || []);
-      setRoster(r || []);
       setLoading(false);
     })();
     const t = setInterval(async () => {
@@ -404,7 +288,7 @@ export default function Schedule() {
           ← Back
         </button>
         <h1 className="sl-welcome">Schedule</h1>
-        <p className="sl-subtitle">Browse matches and rosters by team</p>
+        <p className="sl-subtitle">Browse matches by team</p>
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -563,7 +447,7 @@ export default function Schedule() {
           </div>
         )}
 
-        {/* Grid: left schedule lists, right roster */}
+        {/* Grid: left schedule lists  */}
         <div
           style={{
             display: "grid",
@@ -626,8 +510,8 @@ export default function Schedule() {
             </div>
           </div>
 
-          <RosterPanel roster={roster} />
         </div>
+        <Footer />
       </div>
     </>
   );

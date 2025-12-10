@@ -4,46 +4,11 @@ import { Link } from "react-router-dom";
 import "./styles.css";
 import API_BASE_URL from "./config";
 import { useAuth } from "./AuthContext";
+import Footer from "./components/Footer";
+import TopNav from "./components/Topnav";
+
 import { ScoreInput } from "./components/LiveScore"; // we added this component earlier
 
-/* ---------------- Top Nav (same look) ---------------- */
-function TopNav({ name, hasLive, onLogout }) {
-  return (
-    <header className="sl-topnav">
-      <div className="sl-brand">
-        <img src="/saint-leo-logo.png" alt="Saint Leo" />
-        <div className="sl-brand-text">
-          <span className="sl-brand-title">Saint Leo</span>
-          <span className="sl-brand-sub">Tennis</span>
-        </div>
-      </div>
-
-      <nav className="sl-navlinks">
-        <Link to="/dashboard" className="sl-navlink">
-          Dashboard
-        </Link>
-        <Link to="/players" className="sl-navlink">
-          Roster
-        </Link>
-        <Link to="/schedule" className="sl-navlink">
-          Schedule
-        </Link>
-        {hasLive && (
-          <Link to="/livescore" className="sl-navlink sl-navlink-accent">
-            Live Scores
-          </Link>
-        )}
-        <Link to="/admin" className="sl-navlink sl-navlink-accent">
-          Admin Panel
-        </Link>
-      </nav>
-
-      <div className="sl-userbox">
-        <span className="sl-username">{name}</span>
-      </div>
-    </header>
-  );
-}
 
 /* ---------------- utils ---------------- */
 const headers = {
@@ -167,7 +132,6 @@ function StatusPill({ status }) {
     </span>
   );
 }
-
 function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) {
   const [winner, setWinner] = React.useState("unfinished"); // "team" | "opponent" | "unfinished"
 
@@ -215,6 +179,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
       await onSave(); // save scores via PUT /scores/{id}
     }
   };
+
   async function handleComplete() {
     const res = await completeScoreLine(r.id, winner);
     if (res?.score) {
@@ -229,15 +194,26 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,.25)",
-        display: "grid",
-        placeItems: "center",
+        background: "rgba(0,0,0,.35)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16,              // space from phone edges
         zIndex: 1000,
       }}
     >
       <div
-        className="sl-card"
-        style={{ width: 640, padding: 16, background: "#fff" }}
+        className="sl-card edit-line-card"
+        style={{
+          width: "100%",          // take full width of the padding box
+          maxWidth: 640,          // but cap it on bigger screens
+          padding: 16,
+          background: "#fff",
+          borderRadius: 16,
+          boxSizing: "border-box",
+          maxHeight: "90vh",      // avoid going off-screen vertically
+          overflowY: "auto",      // scroll inside if needed
+        }}
       >
         <div
           style={{
@@ -245,9 +221,10 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: 8,
+            gap: 8,
           }}
         >
-          <div style={{ fontWeight: 800, color: "#174d2a" }}>
+          <div style={{ fontWeight: 800, color: "#174d2a", fontSize: 18 }}>
             {isScheduled ? "Start Line" : "Edit Score"}
           </div>
           <button className="sl-logout" onClick={onClose}>
@@ -284,10 +261,12 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             <Field label="Team Player(s)">
               {isDoubles ? (
                 <div
+                  className="edit-line-doubles-row"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
+                    flexWrap: "wrap", // helps on small screens
                   }}
                 >
                   <input
@@ -296,7 +275,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
                     placeholder="Eduardo"
                     disabled={!isScheduled} // lock after live
                     className="sl-input"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 0 }}
                   />
                   <span>&</span>
                   <input
@@ -305,7 +284,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
                     placeholder="Luis"
                     disabled={!isScheduled}
                     className="sl-input"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 0 }}
                   />
                 </div>
               ) : (
@@ -322,10 +301,12 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             <Field label="Opponent(s)">
               {isDoubles ? (
                 <div
+                  className="edit-line-doubles-row"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
+                    flexWrap: "wrap",
                   }}
                 >
                   <input
@@ -336,7 +317,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
                     placeholder="Opp 1"
                     disabled={!isScheduled}
                     className="sl-input"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 0 }}
                   />
                   <span>&</span>
                   <input
@@ -347,7 +328,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
                     placeholder="Opp 2"
                     disabled={!isScheduled}
                     className="sl-input"
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 0 }}
                   />
                 </div>
               ) : (
@@ -364,7 +345,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             </Field>
           </Row>
 
-          {/* Serve is allowed in both states */}
           <Row>
             <Field label="Serve">
               <select
@@ -390,7 +370,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             </Field>
           </Row>
 
-          {/* Sets editor only when LIVE */}
           {!isScheduled && (
             <Row>
               <Field label="Sets">
@@ -410,7 +389,12 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             <Row>
               <Field label="Complete line">
                 <div
-                  style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
                 >
                   <select
                     value={winner}
@@ -430,7 +414,14 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
             </Row>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginTop: 6,
+              flexWrap: "wrap",
+            }}
+          >
             <button className="sl-view-btn" onClick={handlePrimary}>
               {isScheduled ? "Start Line" : "Save Score"}
             </button>
@@ -443,6 +434,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
     </div>
   );
 }
+
 
 async function loadPlayers() {
   const d =
@@ -2038,6 +2030,7 @@ export default function Admin() {
           </>
         )}
       </div>
+      <Footer />
     </>
   );
 }
