@@ -220,8 +220,9 @@ export default function Schedule() {
     .filter((m) => String(m.status).toLowerCase() === "completed")
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const { days, hours, minutes, seconds } = nextMatch?.date ? useCountdown(nextMatch.date) : { days: 0, hours: 0, minutes: 0, seconds: 0 };
-  const hasLive = liveMatches.length > 0;
+    const { days, hours, minutes, seconds } = useCountdown(nextMatch?.date);
+    
+    const hasLive = liveMatches.length > 0;
 
   // actions
   const handleDeleteMatch = async (id) => {
