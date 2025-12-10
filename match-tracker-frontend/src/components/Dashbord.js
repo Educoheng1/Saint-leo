@@ -138,7 +138,7 @@ export default function Dashbord() {
         : user.email)
     : "Guest";
   const hasLive = liveMatches.length > 0;
-  const { d, h, m, s } = useCountdown(nextMatch?.date);
+  const { d, h, m, s } = nextMatch?.date ? useCountdown(nextMatch.date) : { d: 0, h: 0, m: 0, s: 0 };
 
   useEffect(() => {
     let mounted = true;

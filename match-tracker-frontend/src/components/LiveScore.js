@@ -615,6 +615,7 @@ function MatchBlock({ match, rows }) {
    LiveScore Component
 ========================================================= */
 export default function LiveScore() {
+  
   const [liveMatches, setLiveMatches] = useState([]); // array of matches
   const [rowsByMatch, setRowsByMatch] = useState({}); // { [matchId]: rows[] }
   const [loading, setLoading] = useState(true);
@@ -626,6 +627,7 @@ export default function LiveScore() {
   // load live matches + their scores (for each match)
   useEffect(() => {
     let mounted = true;
+    console.log("LiveScore load() called");
 
     const load = async () => {
       setLoading(true);
@@ -654,14 +656,14 @@ export default function LiveScore() {
       setLoading(false);
     };
 
-    load();
-    const t = setInterval(load, 5000);
+  // run only once when component mounts
+  load();
 
-    return () => {
-      mounted = false;
-      clearInterval(t);
-    };
-  }, []);
+  return () => {
+    mounted = false;
+    // no interval to clear anymore
+  };
+}, []); // keep deps empty
 
   return (
     <>

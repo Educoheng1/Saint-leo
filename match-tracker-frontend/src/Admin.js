@@ -1083,14 +1083,14 @@ export default function Admin() {
   /* ----- boot: load live + schedule/players periodically ----- */
   useEffect(() => {
     let mounted = true;
-
+  
     async function tick() {
       try {
         const lives = await loadLive();
         if (!mounted) return;
         setHasLive(lives && lives.length > 0);
         setLiveMatches(lives || []);
-
+  
         const map = {};
         for (const m of lives || []) {
           const newLines = await loadScores(m.id);
@@ -1098,7 +1098,7 @@ export default function Admin() {
           map[m.id] = newLines;
         }
         setLinesByMatch(map);
-
+  
         // we also make sure matches / players are loaded at least once
         if (!matches.length) {
           const ms = await loadMatches();
@@ -1114,15 +1114,15 @@ export default function Admin() {
         console.error("Admin poll error", err);
       }
     }
-
-    tick(); // run once immediately
-    const t = setInterval(tick, 8000);
+  
+    // run once immediately, no polling
+    tick();
+  
     return () => {
       mounted = false;
-      clearInterval(t);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  
   /* ---------------- derived for schedule tab ---------------- */
   const matchesByGender = useMemo(
     () => matches.filter((m) => m.gender === genderTab),

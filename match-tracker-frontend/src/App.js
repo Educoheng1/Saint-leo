@@ -39,6 +39,7 @@ function AppRoutes() {
 }
 
 function App() {
+  
   return (
     <AuthProvider>
       <BrowserRouter>
