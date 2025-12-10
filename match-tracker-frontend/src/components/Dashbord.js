@@ -123,71 +123,65 @@ const fmtDate = (iso) =>
         minute: "2-digit",
       })
     : "TBD";
-export default function Dashbord() {
-  const navigate = useNavigate();
-  const guestName = localStorage.getItem("guestName") || "Guest";
-
-  const [liveMatches, setLiveMatches] = useState([]); // ARRAY
-  const [nextMatch, setNextMatch] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
-
-  const displayName = user
-    ? (user.first_name || user.last_name
-        ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
-        : user.email)
-    : "Guest";
-  const hasLive = liveMatches.length > 0;
-  const { d, h, m, s } = nextMatch?.date ? useCountdown(nextMatch.date) : { d: 0, h: 0, m: 0, s: 0 };
-
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      setLoading(true);
-      const lm = await fetchLiveMatch(); // returns []
-      if (!mounted) return;
-
-      if (lm && lm.length > 0) {
-        setLiveMatches(lm);
-        setNextMatch(null);
-      } else {
-        setLiveMatches([]);
-        const up = await fetchUpcomingMatch();
-        if (!mounted) return;
-        setNextMatch(up);
-      }
-      setLoading(false);
-    })();
-
-
-    const t = setInterval(async () => {
-      const lm = await fetchLiveMatch();
-      if (!mounted) return;
-
-      if (lm && lm.length > 0) {
-        setLiveMatches(lm);
-        setNextMatch(null);
-      } else {
-        setLiveMatches([]);
-        const up = await fetchUpcomingMatch();
-        if (!mounted) return;
-        setNextMatch(up);
-      }
-    }, 15000);
-
-    return () => {
-      mounted = false;
-      clearInterval(t);
-    };
-  }, []);
-
+    export default function Dashbord() {
+      const navigate = useNavigate();
+    
+      // auth hook MUST be at the top level of the component
+      const { user } = useAuth();
+    
+      const guestNameFromStorage = localStorage.getItem("guestName") || "Guest";
+    
+      const displayName = user
+        ? (user.first_name || user.last_name
+            ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+            : user.email)
+        : guestNameFromStorage;
+    
+      const [liveMatches, setLiveMatches] = useState([]); // ARRAY
+      const [nextMatch, setNextMatch] = useState(null);
+      const [loading, setLoading] = useState(true);
+    
+      const hasLive = liveMatches.length > 0;
+      const { d, h, m, s } = useCountdown(nextMatch?.date);
+    
+      useEffect(() => {
+        let mounted = true;
+    
+        const load = async () => {
+          setLoading(true);
+          const lm = await fetchLiveMatch(); // returns []
+          if (!mounted) return;
+    
+          if (lm && lm.length > 0) {
+            setLiveMatches(lm);
+            setNextMatch(null);
+          } else {
+            setLiveMatches([]);
+            const up = await fetchUpcomingMatch();
+            if (!mounted) return;
+            setNextMatch(up);
+          }
+          setLoading(false);
+        };
+    
+        // initial load
+        load();
+    
+        // 15s polling
+        const t = setInterval(load, 15000);
+    
+        return () => {
+          mounted = false;
+          clearInterval(t);
+        };
+      }, []);
+    
   return (
     <div className="dashboard-page">
-      <TopNav name={guestName} hasLive={hasLive} />
+      <TopNav name={displayName} hasLive={hasLive} />
 
       <main className="sl-main">
-      <h1 className="sl-welcome">Welcome back, {displayName}!</h1>
+        <h1 className="sl-welcome">Welcome back, {displayName}!</h1>
         <p className="sl-subtitle">Saint Leo Lions Tennis Team Dashboard</p>
 
         {loading ? (

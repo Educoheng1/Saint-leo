@@ -5,7 +5,6 @@ import "../styles.css";
 import Footer from "./Footer";
 import TopNav from "./Topnav";
 import API_BASE_URL from "../config";
-import { useAuth } from "../AuthContext";
 
 
 /* ---------- utils ---------- */
