@@ -820,7 +820,7 @@ async def update_scores(scores_id: int, payload: UpdateScore):
         values["status"] = payload.status
 
     if payload.current_serve is not None:
-        values["current_serve"] = str(payload.current_serve)  # store "0"/"1"
+        values["current_serve"] = int(payload.current_serve)  # store "0"/"1"
 
     # winner can be null intentionally; update only if explicitly sent
     if "winner" in payload.model_fields_set:
