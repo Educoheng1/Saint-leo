@@ -814,7 +814,7 @@ async def update_scores(scores_id: int, payload: UpdateScore):
         values["sets"] = _coerce_sets(payload.sets)
 
     if payload.current_game is not None:
-        values["current_game"] = payload.current_game
+     values["current_game"] = str(payload.current_game)
 
     if payload.status is not None:
         values["status"] = payload.status
