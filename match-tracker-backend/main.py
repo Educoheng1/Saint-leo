@@ -114,7 +114,7 @@ class scores(BaseModel):
     current_game: List[int] = [0, 0]  # Current game score [team, opponent]
     status: str = "pending"  # "live", "completed", or "pending"
     started: bool = False  # Whether the scores has started
-    current_serve: Optional[int] = None  # 0 for player1/team, 1 for opponent
+    current_serve: Optional[str] = None  # 0 for player1/team, 1 for opponent
     winner: Optional[str] = None 
 
 class UpdateScore(BaseModel):
@@ -127,7 +127,7 @@ class UpdateScore(BaseModel):
     winner: Optional[str] = None
     line_no: Optional[int] = None
     sets: Optional[List[List[int]]] = None
-    current_game: Optional[List[int]] = None
+    current_game: int | list[int] | None = None 
     started: Optional[bool] = None
     current_serve: Optional[str] = None
 class CompleteScorePayload(BaseModel):
@@ -151,7 +151,7 @@ class StartScorePayload(BaseModel):
     opponent1: str = Field(..., min_length=1)
     player2: Optional[str] = None      # required for doubles; ignored for singles
     opponent2: Optional[str] = None    # required for doubles; ignored for singles
-    current_serve: Optional[int] = 0   # 0=home,1=away (tweak if you use different)
+    current_serve: Optional[str] = "0"   # 0=home,1=away (tweak if you use different)
 
     @validator("player1", "opponent1", pre=True)
     def strip_basic(cls, v):
@@ -572,7 +572,7 @@ async def start_match(match_id: int):
                 "current_game": [0, 0],
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": 0,
+                "current_serve": "0",
                 "winner": None,
             })
         else:
@@ -590,7 +590,7 @@ async def start_match(match_id: int):
                 "current_game": [0, 0],
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": 0,
+                "current_serve": "0",
                 "winner": None,
             })
 
@@ -806,46 +806,41 @@ async def get_scores_by_id(scores_id: int):
 
 
 @app.put("/scores/{scores_id}")
-async def update_scores(scores_id: int, scores_data: UpdateScore):
-    current_user = Depends(admin_required)
-    # build the fields we actually want to update
+async def update_scores(scores_id: int, payload: UpdateScore):
+    print("Received payload:", payload)
     values = {}
 
-    if scores_data.sets is not None:
-        # normalize before saving if needed
-        values["sets"] = _coerce_sets(scores_data.sets)
+    if payload.sets is not None:
+        values["sets"] = _coerce_sets(payload.sets)
 
-    # prevent empty UPDATE (this is what causes "near WHERE": syntax error)
+    if payload.current_game is not None:
+        values["current_game"] = payload.current_game
+
+    if payload.status is not None:
+        values["status"] = payload.status
+
+    if payload.current_serve is not None:
+        values["current_serve"] = str(payload.current_serve)  # store "0"/"1"
+
+    # winner can be null intentionally; update only if explicitly sent
+    if "winner" in payload.model_fields_set:
+        values["winner"] = payload.winner
+
     if not values:
         raise HTTPException(status_code=400, detail="No updatable fields provided")
 
-    # run the UPDATE on the correct row
     stmt = (
         update(scores_tbl)
-        .where(
-            and_(
-                scores_tbl.c.id == scores_id,
-            )
-        )
+        .where(scores_tbl.c.id == scores_id)
         .values(**values)
     )
-
     await database.execute(stmt)
 
-    # now fetch the updated row to return it
-    row_query = (
-        select(scores_tbl)
-        .where(
-            and_(
-                scores_tbl.c.id == scores_id,
-            )
-        )
+    updated_row = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == scores_id)
     )
 
-    updated_row = await database.fetch_one(row_query)
-
     if not updated_row:
-        # means that line (scores_id) doesn't belong to that match_id
         raise HTTPException(status_code=404, detail="Score row not found")
 
     return {

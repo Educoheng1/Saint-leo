@@ -47,6 +47,19 @@ const fmtDate = (iso) => {
       })
     : "TBD";
 };
+function getLiveServeSide(row) {
+  const base = String(row?.current_serve); // "0" or "1"
+  const total = totalGamesCombined(row.sets, row.current_game); // ✅ FIX
+
+  if (!(base === "0" || base === "1")) return null;
+
+  const live =
+    total % 2 === 0
+      ? base
+      : base === "0" ? "1" : "0";
+
+  return live === "0" ? "team" : "opp";
+}
 
 function useCountdown(iso) {
   const [now, setNow] = useState(Date.now());
@@ -106,6 +119,18 @@ const gameLabel = (cg) => {
   if (!Array.isArray(cg) || cg.length < 2) return "—";
   return `${cg[0] ?? 0}–${cg[1] ?? 0}`;
 };
+function totalGamesCombined(sets, currentGame) {
+  const s = normalizeSets(sets, 5);
+  const cg = Array.isArray(currentGame) ? currentGame : [0, 0];
+
+  const teamSets = s.reduce((sum, x) => sum + (x.team || 0), 0);
+  const oppSets  = s.reduce((sum, x) => sum + (x.opp || 0), 0);
+
+  const team = teamSets + (cg[0] || 0);
+  const opp  = oppSets  + (cg[1] || 0);
+
+  return team + opp;
+}
 
 /* ---------- small UI atoms ---------- */
 function StatusChip({ status }) {
@@ -274,12 +299,14 @@ function MatchBlock({ match, rows }) {
       <div className="ls-grid">
         {doubles.length ? (
           doubles.map((r) => {
-            const serveSide =
-              r.current_serve === 0
-                ? "team"
-                : r.current_serve === 1
-                ? "opp"
-                : null;
+            const cs = String(r.current_serve); // handles 0/1 and "0"/"1"
+            const serveSide = getLiveServeSide(r);
+            console.log("DOUBLES SERVE DEBUG", {
+              id: r.id,
+              current_serve: r.current_serve,
+              current_game: r.current_game,
+              serveSide,
+            });
 
             const setCols = normalizeSets(r.sets, 3);
             const teamSets = setsWonByTeam(setCols);
@@ -343,6 +370,13 @@ function MatchBlock({ match, rows }) {
                       </div>
                     </div>
                     <StatusChip status={r.status} />
+                    <Link
+  to={`/livescore/${match.id}/line/${r.id}`}
+  className="sl-btn"
+  style={{ textDecoration: "none" }}
+>
+  Match stats
+</Link>
                   </div>
                 </div>
 
@@ -353,6 +387,7 @@ function MatchBlock({ match, rows }) {
                   {/* TEAM (Lions) */}
                   <div className={`ls-row ${teamWins ? "win" : ""}`}>
                     <div className="ls-row-names">
+                      
                       <ServeDot
                         side={serveSide === "team" ? "team" : null}
                       />
@@ -437,13 +472,13 @@ function MatchBlock({ match, rows }) {
       <div className="ls-grid">
         {singles.length ? (
           singles.map((r) => {
-            const serveSide =
-              r.current_serve === 0
-                ? "team"
-                : r.current_serve === 1
-                ? "opp"
-                : null;
-
+            const serveSide = getLiveServeSide(r);
+            console.log("SINGLES SERVE DEBUG", {
+              id: r.id,
+              current_serve: r.current_serve,
+              current_game: r.current_game,
+              serveSide,
+            });
             const setCols = normalizeSets(r.sets, 3);
             const teamSets = setsWonByTeam(setCols);
             const oppSets = setCols.filter(
@@ -506,6 +541,13 @@ function MatchBlock({ match, rows }) {
                       </div>
                     </div>
                     <StatusChip status={r.status} />
+                    <Link
+  to={`/livescore/${match.id}/line/${r.id}`}
+  className="sl-btn"
+  style={{ textDecoration: "none" }}
+>
+  Match stats
+</Link>
                   </div>
                 </div>
 

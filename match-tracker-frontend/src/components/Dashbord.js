@@ -40,7 +40,6 @@ async function fetchLiveMatch() {
   // Try dedicated endpoints first
   for (const url of [
     `${API_BASE_URL}/schedule?status=live`,
-    `${API_BASE_URL}/schedule?status=Live`,
   ]) {
     const d = await fetchJSON(url);
     if (!d) continue;
@@ -140,6 +139,7 @@ const fmtDate = (iso) =>
       const [liveMatches, setLiveMatches] = useState([]); // ARRAY
       const [nextMatch, setNextMatch] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [tab, setTab] = useState("men"); // 'men' | 'women'
     
       const hasLive = liveMatches.length > 0;
       const { d, h, m, s } = useCountdown(nextMatch?.date);
@@ -191,7 +191,8 @@ const fmtDate = (iso) =>
     {/* Optional header with count */}
     <div className="sl-live-count">
       {liveMatches.length} LIVE MATCH
-      {liveMatches.length > 1 ? "ES" : ""} IN PROGRESS
+      {liveMatches.length > 1 ? "ES" : ""} IN PROGRESS- 
+      {tab === "men" ? "Men" : "Women"}
     </div>
 
     {liveMatches.map((m) => (

@@ -7,6 +7,7 @@ import Admin from "./Admin";
 import BoxScorePage from "./components/BoxScorePage";
 import Dashboard from "./components/Dashbord";
 import { AuthProvider, useAuth } from "./AuthContext";
+import LineScorePage from "./components/LineScorePage";
 
 // This component holds the routes and uses auth state
 function AppRoutes() {
@@ -27,7 +28,7 @@ function AppRoutes() {
         <Route path="/players" element={<PlayerList />} />
         <Route path="/livescore" element={<LiveScore />} />
         <Route path="/boxscore/:id" element={<BoxScorePage />} />
-
+        <Route path="/livescore/:matchId/line/:lineId" element={<LineScorePage />} />
         {/* Admin route: only admins can see this page on the frontend */}
         <Route
           path="/admin"

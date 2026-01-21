@@ -91,15 +91,30 @@ const looksLive = (m) => {
   );
 };
 function ensureSets(v) {
-  if (Array.isArray(v))
-    return v.map((s) => [Number(s?.[0] || 0), Number(s?.[1] || 0)]);
+  // returns [[team, opp], ...]
+  if (Array.isArray(v)) {
+    return v.map((s) => {
+      // already array
+      if (Array.isArray(s)) return [Number(s?.[0] || 0), Number(s?.[1] || 0)];
+
+      // object shape from backend: {team, opp} (or variants)
+      return [
+        Number(s?.team ?? s?.a ?? s?.team_score ?? s?.home ?? 0),
+        Number(s?.opp ?? s?.b ?? s?.opp_score ?? s?.away ?? 0),
+      ];
+    });
+  }
+
+  // string like "6-4, 3-6"
   if (typeof v === "string" && v.trim()) {
     return v
       .split(",")
       .map((p) => p.trim().split("-").map((n) => Number(n || 0)));
   }
-  return [[0, 0]]; // default one empty set
+
+  return [[0, 0]];
 }
+
 
 /* ---------------- data loaders (players / schedule / live) ---------------- */
 function StatusPill({ status }) {
@@ -132,7 +147,7 @@ function StatusPill({ status }) {
     </span>
   );
 }
-function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) {
+function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, players = [] }) {
   const [winner, setWinner] = React.useState("unfinished"); // "team" | "opponent" | "unfinished"
 
   React.useEffect(() => {
@@ -164,7 +179,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
       const body = {
         player1: r.player1,
         opponent1: r.opponent1,
-        current_serve: Number(r.current_serve ?? 0),
+        current_serve: String(r.current_serve ?? "0"),
       };
       if (isDoubles) {
         body.player2 = r.player2;
@@ -258,45 +273,66 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
           </Row>
 
           <Row>
-            <Field label="Team Player(s)">
-              {isDoubles ? (
-                <div
-                  className="edit-line-doubles-row"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap", // helps on small screens
-                  }}
-                >
-                  <input
-                    value={r.player1 || ""}
-                    onChange={(e) => onChange({ player1: e.target.value })}
-                    placeholder="Eduardo"
-                    disabled={!isScheduled} // lock after live
-                    className="sl-input"
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                  <span>&</span>
-                  <input
-                    value={r.player2 || ""}
-                    onChange={(e) => onChange({ player2: e.target.value })}
-                    placeholder="Luis"
-                    disabled={!isScheduled}
-                    className="sl-input"
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                </div>
-              ) : (
-                <input
-                  value={r.player1 || ""}
-                  onChange={(e) => onChange({ player1: e.target.value })}
-                  placeholder="Singles Player"
-                  disabled={!isScheduled}
-                  className="sl-input"
-                />
-              )}
-            </Field>
+          <Field label="Team Player(s)">
+  {isDoubles ? (
+    <div
+      className="edit-line-doubles-row"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap",
+      }}
+    >
+      <select
+        value={r.player1 || ""}
+        onChange={(e) => onChange({ player1: e.target.value })}
+        disabled={!isScheduled}
+        className="sl-input"
+        style={{ flex: 1, minWidth: 0 }}
+      >
+        <option value="">Player 1…</option>
+        {players.map((p) => (
+          <option key={p.id} value={p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
+      <span>&</span>
+
+      <select
+        value={r.player2 || ""}
+        onChange={(e) => onChange({ player2: e.target.value })}
+        disabled={!isScheduled}
+        className="sl-input"
+        style={{ flex: 1, minWidth: 0 }}
+      >
+        <option value="">Player 2…</option>
+        {players.map((p) => (
+          <option key={p.id} value={p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : (
+    <select
+      value={r.player1 || ""}
+      onChange={(e) => onChange({ player1: e.target.value })}
+      disabled={!isScheduled}
+      className="sl-input"
+    >
+      <option value="">Select roster player…</option>
+      {players.map((p) => (
+        <option key={p.id} value={p.name}>
+          {p.name}
+        </option>
+      ))}
+    </select>
+  )}
+</Field>
+
 
             <Field label="Opponent(s)">
               {isDoubles ? (
@@ -348,13 +384,13 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
           <Row>
             <Field label="Serve">
               <select
-                value={Number(r.current_serve ?? 0)}
+                value={String(r.current_serve ?? "0")}
                 onChange={(e) =>
-                  onChange({ current_serve: Number(e.target.value) })
+                  onChange({ current_serve: String(e.target.value) })
                 }
               >
-                <option value={0}>Team</option>
-                <option value={1}>Opponent</option>
+                <option value="0">Team</option>
+                <option value="1">Opponent</option>
               </select>
             </Field>
             <Field label="Status">
@@ -369,21 +405,28 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange }) 
               </select>
             </Field>
           </Row>
-
+          <SetsEditor
+  value={r.sets}
+  onChange={(next) => onChange({ sets: next })}
+/>
           {!isScheduled && (
-            <Row>
-              <Field label="Sets">
-                <SetsEditor
-                  value={r.sets ?? ensureSets(r.setsText)}
-                  onChange={(next) =>
-                    onChange({ sets: next, setsText: undefined })
-                  }
-                  labelLeft="Team"
-                  labelRight="Opp"
-                />
-              </Field>
-            </Row>
-          )}
+  <Row>
+    <Field label="Game">
+      <GameEditor
+        value={r.current_game}
+        onChange={(next) =>
+          onChange({
+            current_game: Array.isArray(next)
+              ? next
+              : Array.isArray(next?.score)
+              ? next.score
+              : [0, 0],
+          })
+        }
+      />
+    </Field>
+  </Row>
+)}
 
           {isLive && (
             <Row>
@@ -630,19 +673,55 @@ async function startScoreLine(scoreId, body) {
 }
 
 // Scores
+function isAllZeroSets(sets) {
+  if (!Array.isArray(sets) || sets.length === 0) return true;
+  return sets.every(
+    (s) =>
+      Array.isArray(s) &&
+      Number(s?.[0] ?? 0) === 0 &&
+      Number(s?.[1] ?? 0) === 0
+  );
+}
+
+function pickCurrentSetTotal(setsArr) {
+  // setsArr is [[team,opp], ...]
+  // choose the last set that has any games
+  for (let i = setsArr.length - 1; i >= 0; i--) {
+    const t = Number(setsArr[i]?.[0] ?? 0);
+    const o = Number(setsArr[i]?.[1] ?? 0);
+    if (t !== 0 || o !== 0) return t + o;
+  }
+  return 0;
+}
+
 async function saveScoreLine(matchId, row) {
   if (!row?.id) {
     alert("Cannot save score: missing line id");
     return null;
   }
+
+  // normalize sets into [[team,opp],...]
+  const normalizedSets = Array.isArray(row.sets)
+    ? ensureSets(row.sets)
+    : ensureSets(stringToSets(row.setsText));
+
+  // ✅ total games in the current set (ex: 6:6 -> 12)
+  const totalGame = pickCurrentSetTotal(normalizedSets);
+
   const payload = {
-    sets: Array.isArray(row.sets) ? row.sets : stringToSets(row.setsText),
-    current_game: row.current_game || [0, 0],
     status: row.status || "live",
-    current_serve: String(row.current_serve ?? 0),
+    current_serve: String(row.current_serve ?? "0"),
     winner: row.winner ?? null,
+    current_game: totalGame, // ✅ number derived from sets
   };
+
+  // only send sets if they’re not all zeros
+  if (!isAllZeroSets(normalizedSets)) {
+    payload.sets = normalizedSets;
+  }
+
   try {
+    console.log("SAVE payload", payload);
     const r = await fetch(`${API_BASE_URL}/scores/${row.id}`, {
       method: "PUT",
       headers,
@@ -656,6 +735,7 @@ async function saveScoreLine(matchId, row) {
     return null;
   }
 }
+
 
 async function completeScoreLine(
   scoreId,
@@ -1071,14 +1151,46 @@ export default function Admin() {
   const commitEdit = async () => {
     const { matchId, draftLine } = editing;
     if (!matchId || !draftLine) return;
-    const payload = { ...draftLine, sets: ensureSets(draftLine.sets) };
-    const res = await saveScoreLine(matchId, payload);
-    if (res) {
-      const fresh = await loadScores(matchId);
-      setLinesByMatch((prev) => ({ ...prev, [matchId]: fresh }));
-      closeEdit();
-    } else alert("Failed to save line");
+  
+    // build a clean local version for immediate UI
+    const localSets = Array.isArray(draftLine.sets)
+      ? ensureSets(draftLine.sets)
+      : ensureSets(stringToSets(draftLine.setsText));
+  
+    const optimisticRow = {
+      ...draftLine,
+      sets: localSets,
+      setsText: setsToString(localSets),
+    };
+  
+    // ✅ 1) update UI immediately
+    setLinesByMatch((prev) => ({
+      ...prev,
+      [matchId]: (prev[matchId] || []).map((r) =>
+        r.id === optimisticRow.id ? { ...r, ...optimisticRow } : r
+      ),
+    }));
+  
+    // (optional) close modal immediately so it feels instant
+    closeEdit();
+  
+    // ✅ 2) save to backend
+    const res = await saveScoreLine(matchId, optimisticRow);
+    if (!res) {
+      alert("Failed to save line");
+      return;
+    }
+  
+    // ✅ 3) refetch authoritative data (prevents drift)
+    const fresh = await loadScores(matchId);
+    const normalized = (fresh || []).map((row) => ({
+      ...row,
+      sets: ensureSets(row.sets ?? row.setsText),
+      setsText: setsToString(row.sets ?? row.setsText),
+    }));
+    setLinesByMatch((prev) => ({ ...prev, [matchId]: normalized }));
   };
+  
 
   /* ----- boot: load live + schedule/players periodically ----- */
   useEffect(() => {
@@ -1258,7 +1370,7 @@ export default function Admin() {
         opponent2: "",
         setsText: "",
         current_game: [0, 0],
-        current_serve: 0,
+        current_serve: "0",
         status: "live",
         winner: null,
       };
@@ -1505,8 +1617,10 @@ export default function Admin() {
 
                 {/* shared edit modal for any match/line */}
                 <EditLineModal
+                
   open={editingOpen}
   value={editing.draftLine || {}}
+  players={players}   // <-- add this
   onClose={closeEdit}
   onChange={(patch) =>
     setEditing((prev) => ({

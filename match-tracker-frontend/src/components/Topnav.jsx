@@ -24,13 +24,15 @@ export default function TopNav({ hasLive }) {
       {/* single row: brand left, name + login/logout + burger right */}
       <div className="sl-topnav-main">
         <div className="sl-brand">
-          <img
-            src="/saint-leo-logo.png"
-            alt="Saint Leo"
-            className="sl-brand-logo"
-          />
-          <span className="sl-brand-title">Saint Leo Tennis</span>
-        </div>
+        <Link to="/dashboard" className="sl-brand">
+  <img
+     src="/saint-leo-logo.png"
+     alt="Saint Leo"
+     className="sl-brand-logo"
+  />
+  <span className="sl-brand-title">LeoScore</span>
+</Link>
+</div>
 
         <div className="sl-topnav-right">
           <span className="sl-username">{displayName}</span>

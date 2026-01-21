@@ -1339,3 +1339,25 @@
   line-height: 1;            /* prevents 2-line wrap */
   white-space: nowrap;       /* forces one-line text */
 }
+.sl-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: white;
+  cursor: pointer;
+}
+
+.sl-brand:hover {
+  opacity: 0.85;
+}
+
+.sl-logo {
+  height: 36px;
+}
+
+.sl-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}

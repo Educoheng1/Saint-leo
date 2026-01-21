@@ -79,9 +79,9 @@ scores = Table(
     Column("opponent1", String, nullable=True),  # Ensure this column exists
     Column("opponent2", String, nullable=True),
     Column("sets", JSON, nullable=True),       # JSON to store sets data
-    Column("current_game", JSON, nullable=True),  # JSON to store current game score
+    Column("current_game", Integer, nullable=True),
     Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
-    Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
+    Column("current_serve", String, nullable=True),  # 0 for player1, 1 for player2
     Column("winner", String),
     
     
@@ -96,7 +96,7 @@ class UpdateScore(BaseModel):
     winner: Optional[str] = None
     line_no: Optional[int] = None
     sets: Optional[List[List[int]]] = None
-    current_game: Optional[List[int]] = None
+    current_game: Optional[int] = None
     started: Optional[bool] = None
     current_serve: Optional[str] = None
 
