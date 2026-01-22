@@ -542,11 +542,11 @@ async def get_schedule_by_id(id: int):
 live_scores: List[Dict] = []  # in-memory storage
 
 @app.post("/schedule/{match_id}/start")
-
 async def start_match(match_id: int):
-    current_user = Depends(admin_required)
     # Check if the match exists
-    existing = await database.fetch_one(matches.select().where(matches.c.id == match_id))
+    existing = await database.fetch_one(
+        matches.select().where(matches.c.id == match_id)
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Match not found")
 
@@ -555,11 +555,10 @@ async def start_match(match_id: int):
         matches.update().where(matches.c.id == match_id).values(status="live")
     )
 
-    # Automatically create 9 scores (3 doubles, 6 singles)
     scores_to_create = []
     for i in range(1, 10):
         if i <= 3:
-            # First 3 are doubles
+            # doubles
             scores_to_create.append({
                 "match_id": match_id,
                 "line_no": i,
@@ -568,15 +567,15 @@ async def start_match(match_id: int):
                 "player2": f"Doubles Player {i}B",
                 "opponent1": f"Doubles Opponent {i}A",
                 "opponent2": f"Doubles Opponent {i}B",
-                "sets": [],  # Empty sets to start
-                "current_game": [0, 0],
+                "sets": [[0, 0], [0, 0], [0, 0]],
+                "current_game": 0,     # ✅ int
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": "0",
+                "current_serve": 0,    # ✅ int
                 "winner": None,
             })
         else:
-            # Next 6 are singles
+            # singles (lines 1–6)
             line_no = i - 3
             scores_to_create.append({
                 "match_id": match_id,
@@ -586,15 +585,14 @@ async def start_match(match_id: int):
                 "player2": None,
                 "opponent1": f"Singles Opponent {line_no}",
                 "opponent2": None,
-                "sets": [],  # Empty sets to start
-                "current_game": [0, 0],
+                "sets": [[0, 0], [0, 0], [0, 0]],
+                "current_game": 0,     # ✅ int
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": "0",
+                "current_serve": 0,    # ✅ int
                 "winner": None,
             })
 
-    # Insert the scores into the database
     await database.execute_many(scores_tbl.insert(), scores_to_create)
 
     return {"message": f"Match {match_id} started and scores created successfully"}
