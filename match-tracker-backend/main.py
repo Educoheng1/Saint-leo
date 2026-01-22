@@ -146,12 +146,13 @@ def _coerce_winner(w: Optional[str]):
         return None
     raise HTTPException(status_code=422, detail="winner must be 'team', 'opponent', or 'unfinished'")
 
+
 class StartScorePayload(BaseModel):
-    player1: str = Field(..., min_length=1)
-    opponent1: str = Field(..., min_length=1)
-    player2: Optional[str] = None      # required for doubles; ignored for singles
-    opponent2: Optional[str] = None    # required for doubles; ignored for singles
-    current_serve: Optional[str] = "0"   # 0=home,1=away (tweak if you use different)
+    player1: str
+    opponent1: str
+    player2: Optional[str] = None
+    opponent2: Optional[str] = None
+    current_serve: Optional[int] = 0   # ✅ INT, not string
 
     @validator("player1", "opponent1", pre=True)
     def strip_basic(cls, v):
@@ -704,7 +705,6 @@ def get_livescore():
 
 @app.post("/scores/{score_id}/start")
 async def start_score(score_id: int, body: StartScorePayload):
-    current_user = Depends(admin_required)
     # fetch the row
     row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
@@ -724,18 +724,23 @@ async def start_score(score_id: int, body: StartScorePayload):
                 detail="player2 and opponent2 are required for doubles"
             )
     else:
-        # ensure singles stays null
         body.player2 = None
         body.opponent2 = None
 
-    # build updates: set names + start flags (leave sets/current_game as-is)
+    # ✅ force current_serve to int (works for "0", 0, None, etc.)
+    serve_val = body.current_serve if body.current_serve is not None else row["current_serve"]
+    try:
+        serve_val = int(serve_val) if serve_val is not None else 0
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="current_serve must be 0 or 1")
+
     updates = {
         "player1": body.player1,
         "opponent1": body.opponent1,
         "player2": body.player2,
         "opponent2": body.opponent2,
-        "current_serve": body.current_serve if body.current_serve is not None else row["current_serve"],
-        "status": "live",   # align with your matches.status
+        "current_serve": serve_val,  # ✅ int
+        "status": "live",
         "started": 1,
     }
 
@@ -746,10 +751,7 @@ async def start_score(score_id: int, body: StartScorePayload):
     updated = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
     )
-    return {
-        "message": "Score started",
-        "score": _score_row_to_dict(updated),
-    }
+    return {"message": "Score started", "score": _score_row_to_dict(updated)}
 # helper – make sure this returns STR, not int
 def _coerce_winner(winner):
     # frontend sends: "team" | "opponent" | "unfinished"
