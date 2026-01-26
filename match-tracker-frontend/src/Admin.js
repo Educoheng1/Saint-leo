@@ -705,13 +705,15 @@ async function saveScoreLine(matchId, row) {
     ? ensureSets(row.sets)
     : ensureSets(stringToSets(row.setsText));
 
-  // ✅ total games in the current set (ex: 6:6 -> 12)
-  const totalGame = pickCurrentSetTotal(normalizedSets);
+
+// ✅ total games across ALL sets (cumulative)
+const totalGame = normalizedSets.reduce((sum, [team, opp]) => sum + team + opp, 0);
 
   const payload = {
     status: row.status || "live",
     current_serve: String(row.current_serve ?? "0"),
     winner: row.winner ?? null,
+    sets: normalizedSets, 
     current_game: totalGame, // ✅ number derived from sets
   };
 

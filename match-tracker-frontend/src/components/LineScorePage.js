@@ -261,13 +261,26 @@ export default function LineScorePage() {
       </section>
 
       <section className="sl-card" style={{ marginTop: 16 }}>
-  <h2>Match flow</h2>
-  <div style={{ opacity: 0.75, marginBottom: 10 }}>
-    Cumulative games by set {String(line?.status).toLowerCase() === "live" ? "(includes current game)" : ""}
-  </div>
+  <h2>Stats</h2>
 
-  <CumulativeGamesChart line={line} />
+  <div
+    style={{
+      padding: "24px 16px",
+      border: "1px dashed rgba(0,0,0,0.15)",
+      borderRadius: 8,
+      textAlign: "center",
+      opacity: 0.75,
+    }}
+  >
+    <div style={{ fontSize: 16, marginBottom: 6 }}>
+      📊 Match statistics coming soon
+    </div>
+    <div style={{ fontSize: 13 }}>
+      Planned: match flow, momentum, cumulative games, and insights per set.
+    </div>
+  </div>
 </section>
+
       <section className="sl-card" style={{ marginTop: 16 }}>
         <h2>Comments</h2>
         <div style={{ opacity: 0.75 }}>placeholder</div>

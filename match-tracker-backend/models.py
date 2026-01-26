@@ -81,7 +81,7 @@ scores = Table(
     Column("sets", JSON, nullable=True),       # JSON to store sets data
     Column("current_game", Integer, nullable=True),
     Column("started", Integer, nullable=False, default=0),  # Use Integer for boolean (0 = False, 1 = True)
-    Column("current_serve", Integer, nullable=True),  # 0 for player1, 1 for player2
+    Column("current_serve", String, nullable=True),  # 0 for player1, 1 for player2
     Column("winner", String),
     
     

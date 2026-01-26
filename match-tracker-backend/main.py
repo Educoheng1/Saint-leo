@@ -152,7 +152,7 @@ class StartScorePayload(BaseModel):
     opponent1: str
     player2: Optional[str] = None
     opponent2: Optional[str] = None
-    current_serve: Optional[int] = 0   # ✅ INT, not string
+    current_serve: Optional[str] = "0"  # ✅ INT, not string
 
     @validator("player1", "opponent1", pre=True)
     def strip_basic(cls, v):
@@ -811,16 +811,28 @@ async def update_scores(scores_id: int, payload: UpdateScore):
     values = {}
 
     if payload.sets is not None:
-        values["sets"] = _coerce_sets(payload.sets)
+      values["sets"] = payload.sets
+
+    # 🔢 recompute total games from sets
+    try:
+        values["current_game"] = sum(
+            (team + opp) for team, opp in payload.sets
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid sets format; expected [[team, opponent], ...]"
+        )
 
     if payload.current_game is not None:
-     values["current_game"] = str(payload.current_game)
+        values["current_game"] = int(payload.current_game)
+
 
     if payload.status is not None:
         values["status"] = payload.status
 
     if payload.current_serve is not None:
-        values["current_serve"] = int(payload.current_serve)  # store "0"/"1"
+        values["current_serve"] = str(payload.current_serve)  # store "0"/"1"
 
     # winner can be null intentionally; update only if explicitly sent
     if "winner" in payload.model_fields_set:
