@@ -729,10 +729,10 @@ async def start_score(score_id: int, body: StartScorePayload):
 
     # ✅ force current_serve to int (works for "0", 0, None, etc.)
     serve_val = body.current_serve if body.current_serve is not None else row["current_serve"]
-    try:
-        serve_val = int(serve_val) if serve_val is not None else 0
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="current_serve must be 0 or 1")
+    serve_val = "0" if serve_val is None else str(serve_val)
+
+    if serve_val not in ("0", "1"):
+     raise HTTPException(status_code=422, detail="current_serve must be '0' or '1'")
 
     updates = {
         "player1": body.player1,
