@@ -572,7 +572,7 @@ async def start_match(match_id: int):
                 "current_game": 0,     # ✅ int
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": 0,    # ✅ int
+                "current_serve": "0",    
                 "winner": None,
             })
         else:
@@ -590,7 +590,7 @@ async def start_match(match_id: int):
                 "current_game": 0,     # ✅ int
                 "status": "Scheduled",
                 "started": 1,
-                "current_serve": 0,    # ✅ int
+                "current_serve": "0",    
                 "winner": None,
             })
 
