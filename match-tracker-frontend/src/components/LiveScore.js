@@ -233,11 +233,11 @@ function computeDualScore(rows) {
     // normalize winner from all possible formats
     const rawWinner = r?.winner;
     const w = String(rawWinner ?? "").toLowerCase().trim();
-
+    
     let winner = "";
-    if (w === "team" || w === "0") {
+    if (w === "team" || w === "1") {
       winner = "team";
-    } else if (w === "opponent" || w === "1") {
+    } else if (w === "opponent" || w === "2") {
       winner = "opponent";
     }
 
@@ -255,6 +255,12 @@ function computeDualScore(rows) {
   // return { team: teamUnits / 2, opp: oppUnits / 2 };
 }
 
+function normalizeLineWinner(r) {
+  const w = String(r?.winner ?? "").toLowerCase().trim();
+  if (w === "team" || w === "1") return "team";
+  if (w === "opponent" || w === "opp" || w === "2") return "opponent";
+  return ""; // unknown / not set
+}
 
 
 /* One full block: header + doubles + singles for ONE match */
@@ -271,28 +277,25 @@ function MatchBlock({ match, rows }) {
   return (
     <section className="ls-match-block">
       {/* Header scoreboard */}
-      <div className="ls-header sl-card">
-        <div className="ls-left">
-          <div className="ls-kicker">
-            <span className="sl-live-dot">•</span> Live match in progress
-          </div>
-          <div className="ls-title">
-            {match?.opponent ? `Lions vs ${match.opponent}` : "Live Match"}
-          </div>
-          <div className="ls-meta">
-            {fmtDate(match?.date)}{" "}
-            {match?.location ? `• ${match.location}` : ""}
-          </div>
-        </div>
-        <div className="ls-right">
-          <div className="ls-scorebox">
-            <div className="ls-score">{dualScore.team}</div>
-            <div className="ls-score-sep">–</div>
-            <div className="ls-score">{dualScore.opp}</div>
-            <div className="ls-score-label">Team Points</div>
-          </div>
-        </div>
-      </div>
+      <div className="dual-header">
+  <h1 className="dual-title">
+    {match?.team_name || "Saint Leo"} vs {match?.opponent || "Opponent"}
+  </h1>
+
+  <div className="dual-subtitle">Home</div>
+
+  <div className="dual-score-row">
+    <div className="dual-card">
+      <div className="dual-team">{match?.team_name || "Saint Leo"}</div>
+      <div className="dual-score">{dualScore.team}</div>
+    </div>
+
+    <div className="dual-card">
+      <div className="dual-team">{match?.opponent || "Opponent"}</div>
+      <div className="dual-score">{dualScore.opp}</div>
+    </div>
+  </div>
+</div>
 
       {/* Doubles Section */}
       <h2 className="ls-section-title">Doubles</h2>
@@ -301,6 +304,10 @@ function MatchBlock({ match, rows }) {
           doubles.map((r) => {
             const cs = String(r.current_serve); // handles 0/1 and "0"/"1"
             const serveSide = getLiveServeSide(r);
+            const isCompleted = String(r?.status ?? "").toLowerCase().trim() === "completed";
+const lineWinner = normalizeLineWinner(r);
+const teamWon = isCompleted && lineWinner === "team";
+const oppWon = isCompleted && lineWinner === "opponent";
             console.log("DOUBLES SERVE DEBUG", {
               id: r.id,
               current_serve: r.current_serve,
@@ -385,18 +392,24 @@ function MatchBlock({ match, rows }) {
                   style={{ display: "block", width: "100%" }}
                 >
                   {/* TEAM (Lions) */}
-                  <div className={`ls-row ${teamWins ? "win" : ""}`}>
+                  <div
+  className={`ls-row
+    ${teamWins ? "win" : ""}
+    ${isCompleted ? "ls-row-completed" : ""}
+    ${teamWon ? "ls-row-winner" : ""}
+    ${oppWon ? "ls-row-loser" : ""}
+  `}
+>
                     <div className="ls-row-names">
                       
                       <ServeDot
                         side={serveSide === "team" ? "team" : null}
                       />
                       <div className="min-w-0">
-                        <div className="ls-team font-medium truncate">
-                          {r.player1 && r.player2
-                            ? `${r.player1} & ${r.player2}`
-                            : sideText(r, false)}
-                        </div>
+                      <div className="ls-team font-medium truncate">
+  {r.player1 && r.player2 ? `${r.player1} & ${r.player2}` : sideText(r, false)}
+  {teamWon && <span className="ls-win-check">✓</span>}
+</div>
                         <div className="ls-side-label us-label">
                           Lions
                         </div>
@@ -422,17 +435,24 @@ function MatchBlock({ match, rows }) {
                   </div>
 
                   {/* OPP */}
-                  <div className={`ls-row mt-1 ${oppWins ? "lose" : ""}`}>
+                  <div
+  className={`ls-row mt-1
+    ${oppWins ? "lose" : ""}
+    ${isCompleted ? "ls-row-completed" : ""}
+    ${oppWon ? "ls-row-winner" : ""}
+    ${teamWon ? "ls-row-loser" : ""}
+  `}
+>
                     <div className="ls-row-names">
                       <ServeDot
                         side={serveSide === "opp" ? "opp" : null}
                       />
                       <div className="min-w-0">
-                        <div className="ls-opp truncate">
-                          {r.opponent1 && r.opponent2
-                            ? `${r.opponent1} & ${r.opponent2}`
-                            : sideText(r, true)}
-                        </div>
+                      <div className="ls-opp truncate">
+  {r.opponent1 && r.opponent2 ? `${r.opponent1} & ${r.opponent2}` : sideText(r, true)}
+  {oppWon && <span className="ls-win-check">✓</span>}
+</div>
+
                         <div className="ls-side-label opp-label">
                           Opp
                         </div>
@@ -473,6 +493,10 @@ function MatchBlock({ match, rows }) {
         {singles.length ? (
           singles.map((r) => {
             const serveSide = getLiveServeSide(r);
+            const isCompleted = String(r?.status ?? "").toLowerCase().trim() === "completed";
+const lineWinner = normalizeLineWinner(r);
+const teamWon = isCompleted && lineWinner === "team";
+const oppWon = isCompleted && lineWinner === "opponent";
             console.log("SINGLES SERVE DEBUG", {
               id: r.id,
               current_serve: r.current_serve,
@@ -490,9 +514,7 @@ function MatchBlock({ match, rows }) {
             return (
               <div
                 key={r.id}
-                className={`ls-line sl-card ${
-                  r.status === "completed" ? "ls-line-final" : ""
-                }`}
+                className={`ls-line sl-card ${isCompleted ? "ls-line-final" : ""}`}
               >
                 <div
                   className="ls-line-head"
@@ -556,17 +578,22 @@ function MatchBlock({ match, rows }) {
                   style={{ display: "block", width: "100%" }}
                 >
                   {/* TEAM (Lions) */}
-                  <div className={`ls-row ${teamWins ? "win" : ""}`}>
+                  <div
+  className={`ls-row ${teamWins ? "win" : ""}
+    ${isCompleted ? "ls-row-completed" : ""}
+    ${teamWon ? "ls-row-winner" : ""}
+    ${oppWon ? "ls-row-loser" : ""}
+  `}
+>
                     <div className="ls-row-names">
                       <ServeDot
                         side={serveSide === "team" ? "team" : null}
                       />
                       <div className="min-w-0">
-                        <div className="ls-team font-medium truncate">
-                          {r.player1 ||
-                            r.teamA?.player_name ||
-                            "Singles Player"}
-                        </div>
+                      <div className="ls-team font-medium truncate">
+  {r.player1 || r.teamA?.player_name || "Singles Player"}
+  {teamWon && <span className="ls-win-check">✓</span>}
+</div>
                         <div className="ls-side-label us-label">
                           Lions
                         </div>
@@ -598,17 +625,22 @@ function MatchBlock({ match, rows }) {
                   </div>
 
                   {/* OPP */}
-                  <div className={`ls-row mt-1 ${oppWins ? "lose" : ""}`}>
+                  <div
+  className={`ls-row mt-1 ${oppWins ? "lose" : ""}
+    ${isCompleted ? "ls-row-completed" : ""}
+    ${oppWon ? "ls-row-winner" : ""}
+    ${teamWon ? "ls-row-loser" : ""}
+  `}
+>
                     <div className="ls-row-names">
                       <ServeDot
                         side={serveSide === "opp" ? "opp" : null}
                       />
                       <div className="min-w-0">
-                        <div className="ls-opp truncate">
-                          {r.opponent1 ||
-                            r.teamB?.player_name ||
-                            "Singles Opponent"}
-                        </div>
+                      <div className="ls-opp truncate">
+  {r.opponent1 || r.teamB?.player_name || "Singles Opponent"}
+  {oppWon && <span className="ls-win-check">✓</span>}
+</div>
                         <div className="ls-side-label opp-label">
                           Opp
                         </div>

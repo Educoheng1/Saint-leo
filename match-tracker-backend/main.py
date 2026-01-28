@@ -763,7 +763,9 @@ def _coerce_winner(winner):
 
 @app.post("/scores/{score_id}/complete")
 async def complete_score(score_id: int, body: CompleteScorePayload):
-    # (no Depends here now, behaves like your old version)
+    print("=== COMPLETE SCORE CALLED ===")
+    print("score_id:", score_id)
+    print("raw body.winner:", body.winner, type(body.winner))
 
     row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
@@ -771,9 +773,12 @@ async def complete_score(score_id: int, body: CompleteScorePayload):
     if not row:
         raise HTTPException(status_code=404, detail="Score row not found")
 
-    winner_val = _coerce_winner(body.winner)  # "1", "2", or None
+    print("row status before:", row["status"])
+    print("row winner before:", row["winner"])
 
-    # Optional guard: block completing already completed/cancelled rows
+    winner_val = _coerce_winner(body.winner)
+    print("coerced winner_val:", winner_val, type(winner_val))
+
     if str(row["status"]).lower() in ("completed", "cancelled"):
         raise HTTPException(
             status_code=409,
@@ -792,6 +797,11 @@ async def complete_score(score_id: int, body: CompleteScorePayload):
     updated = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == score_id)
     )
+
+    print("row status after:", updated["status"])
+    print("row winner after:", updated["winner"])
+    print("=== COMPLETE SCORE END ===")
+
     return {
         "message": "Score completed",
         "score": _score_row_to_dict(updated),
