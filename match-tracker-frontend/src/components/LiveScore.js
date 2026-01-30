@@ -18,6 +18,13 @@ async function fetchJSON(url) {
     return null;
   }
 }
+const statusRank = (status) => {
+  const s = String(status || "").toLowerCase().trim();
+  if (s === "live" || s === "in_progress" || s === "in-progress" || s === "in progress") return 0;
+  if (s === "scheduled" || s === "pending") return 1;
+  if (s === "completed" || s === "finished") return 2;
+  return 3;
+};
 
 function looksLive(m) {
   const st = String(m?.status ?? "").toLowerCase();
@@ -265,12 +272,19 @@ function normalizeLineWinner(r) {
 
 /* One full block: header + doubles + singles for ONE match */
 function MatchBlock({ match, rows }) {
-  const doubles = rows.filter(
+  const sortedRows = [...(rows || [])].sort((a, b) => {
+    const d = statusRank(a.status) - statusRank(b.status);
+    if (d !== 0) return d;
+    return Number(a.line_no || 0) - Number(b.line_no || 0);
+  });
+  
+  const doubles = sortedRows.filter(
     (r) => (r.match_type || "").toLowerCase() === "doubles"
   );
-  const singles = rows.filter(
+  const singles = sortedRows.filter(
     (r) => (r.match_type || "").toLowerCase() === "singles"
   );
+  
 
   const dualScore = computeDualScore(rows);
 
@@ -338,7 +352,9 @@ const oppWon = isCompleted && lineWinner === "opponent";
                     alignItems: "center",
                   }}
                 >
-                  <div className="ls-line-type">{typeLabel(r)}</div>
+                  <div className="ls-line-type">
+  {typeLabel(r)} {r.line_no ? r.line_no : ""}
+</div>
                   <div
                     style={{
                       display: "flex",
@@ -524,7 +540,9 @@ const oppWon = isCompleted && lineWinner === "opponent";
                     alignItems: "center",
                   }}
                 >
-                  <div className="ls-line-type">{typeLabel(r)}</div>
+                  <div className="ls-line-type">
+  {typeLabel(r)} {r.line_no ? r.line_no : ""}
+</div>
                   <div
                     style={{
                       display: "flex",
@@ -688,23 +706,31 @@ const oppWon = isCompleted && lineWinner === "opponent";
    LiveScore Component
 ========================================================= */
 export default function LiveScore() {
-  
+  const [teamFilter, setTeamFilter] = useState("men");
   const [liveMatches, setLiveMatches] = useState([]); // array of matches
   const [rowsByMatch, setRowsByMatch] = useState({}); // { [matchId]: rows[] }
   const [loading, setLoading] = useState(true);
   const [nextMatch, setNextMatch] = useState(null);
 
-  const hasLive = liveMatches.length > 0;
+  // ✅ define this BEFORE you use it anywhere
+  const filteredLiveMatches = liveMatches.filter((mm) => {
+    const g = String(mm.gender || "").toLowerCase();
+    return g === teamFilter; // teamFilter is "men" or "women"
+  });
+  
+
+  // ✅ now it's safe
+  const hasLive = filteredLiveMatches.length > 0;
+
   const { d, h, m, s } = useCountdown(nextMatch?.date);
 
-  // load live matches + their scores (for each match)
   useEffect(() => {
     let mounted = true;
-    console.log("LiveScore load() called");
 
     const load = async () => {
       setLoading(true);
       const matches = await fetchLiveMatches();
+      console.log("LIVE MATCH SAMPLE:", matches?.[0]); // ✅ you will see this in browser console
       if (!mounted) return;
 
       if (matches && matches.length > 0) {
@@ -712,10 +738,10 @@ export default function LiveScore() {
         setNextMatch(null);
 
         const scoresMap = {};
-        for (const m of matches) {
-          const sc = await fetchScores(m.id);
+        for (const mm of matches) {
+          const sc = await fetchScores(mm.id);
           if (!mounted) return;
-          scoresMap[m.id] = sc;
+          scoresMap[mm.id] = sc;
         }
         setRowsByMatch(scoresMap);
       } else {
@@ -729,14 +755,13 @@ export default function LiveScore() {
       setLoading(false);
     };
 
-  // run only once when component mounts
-  load();
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  return () => {
-    mounted = false;
-    // no interval to clear anymore
-  };
-}, []); // keep deps empty
+
 
   return (
     <>
@@ -747,13 +772,28 @@ export default function LiveScore() {
         style={{ maxWidth: 1100, margin: "16px auto", padding: "0 16px" }}
       >
         <h1 className="sl-welcome">Live Scores</h1>
-        <p className="sl-subtitle">Real-time updates for current matches</p>
+<p className="sl-subtitle">Real-time updates for current matches</p>
+
+<div className="team-toggle">
+  <button
+    className={teamFilter === "men" ? "team-btn active" : "team-btn"}
+    onClick={() => setTeamFilter("men")}
+  >
+    Men
+  </button>
+  <button
+    className={teamFilter === "women" ? "team-btn active" : "team-btn"}
+    onClick={() => setTeamFilter("women")}
+  >
+    Women
+  </button>
+</div>
 
         {loading ? (
           <div className="sl-card sl-skeleton">Loading…</div>
         ) : hasLive ? (
           <>
-            {liveMatches.map((match) => (
+            {filteredLiveMatches.map((match) => (
               <MatchBlock
                 key={match.id}
                 match={match}

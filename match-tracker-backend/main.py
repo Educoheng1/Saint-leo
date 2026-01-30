@@ -3,6 +3,10 @@ import json
 import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Literal
+from datetime import  timezone
+from zoneinfo import ZoneInfo
+from fastapi import Depends, HTTPException
+
 
 # FastAPI
 from fastapi import FastAPI, Depends, HTTPException, Request, status, Query
@@ -130,6 +134,7 @@ class UpdateScore(BaseModel):
     current_game: int | list[int] | None = None 
     started: Optional[bool] = None
     current_serve: Optional[str] = None
+    
 class CompleteScorePayload(BaseModel):
     winner: Literal["team", "opponent", "unfinished"]
 
@@ -461,26 +466,38 @@ async def _fetch_match_scores(match_id: int):
     return [_score_row_to_dict(r) for r in rows]
 
 
+
+NY = ZoneInfo("America/New_York")
+
 @app.post("/schedule")
-async def create_match( match: Match):
-    current_user = Depends(admin_required)
+async def create_match(match: Match, ):
+    # match.date should be an ISO string like "2026-01-29T13:00:00"
+    # Interpret it as New York local time if it has no tzinfo, then convert to UTC.
+    dt = datetime.fromisoformat(match.date)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=NY)  # treat input as local NY time
+
+    dt_utc = dt.astimezone(timezone.utc)  # store UTC in DB
+
     query = matches.insert().values(
-        date=datetime.fromisoformat(match.date),
+        date=dt_utc,
         gender=match.gender,
         opponent=match.opponent,
         location=match.location,
         status=match.status or "scheduled",
         match_number=match.match_number,
-        winner=match.winner  # Add winner field
+        winner=match.winner,
     )
-    print("before try")
+
     try:
         new_id = await database.execute(query)
     except Exception as e:
         print("ERROR CREATING MATCH:", e)
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     return {"id": new_id, "message": "Match created"}
+
 
 @app.get("/schedule")
 async def list_schedule(status: Optional[str] = Query(None)):
@@ -506,26 +523,39 @@ async def list_schedule(status: Optional[str] = Query(None)):
             },
         )
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 @app.get("/schedule/upcoming")
 async def get_upcoming_match():
     rows = await database.fetch_all(matches.select())
-    upcoming: List[Dict] = []
-    now = datetime.utcnow()
+    upcoming = []
+
+    now = datetime.now(timezone.utc)
 
     for row in rows:
         item = row_to_iso(row)
         status = str(item.get("status") or "").lower()
         if status == "completed":
             continue
+
         date_str = item.get("date")
         if not date_str:
             continue
+
         try:
             dt = datetime.fromisoformat(date_str)
         except ValueError:
             continue
-        if dt >= now:
-            upcoming.append((dt, item))
+
+        # if dt is naive, assume it's UTC (or NY if you prefer)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        dt_utc = dt.astimezone(timezone.utc)
+
+        if dt_utc >= now:
+            upcoming.append((dt_utc, item))
 
     if not upcoming:
         return None
@@ -814,37 +844,54 @@ async def get_scores_by_id(scores_id: int):
         return _score_row_to_dict(row)
     raise HTTPException(status_code=404, detail="scores not found")
 
-
 @app.put("/scores/{scores_id}")
 async def update_scores(scores_id: int, payload: UpdateScore):
     print("Received payload:", payload)
     values = {}
 
+    # --- allow editing meta fields (names, type, line, etc.) ---
+    if payload.match_type is not None:
+        values["match_type"] = payload.match_type
+
+    if payload.line_no is not None:
+        values["line_no"] = int(payload.line_no)
+
+    if payload.player1 is not None:
+        values["player1"] = payload.player1
+
+    if payload.player2 is not None:
+        values["player2"] = payload.player2
+
+    if payload.opponent1 is not None:
+        values["opponent1"] = payload.opponent1
+
+    if payload.opponent2 is not None:
+        values["opponent2"] = payload.opponent2
+
+    # --- sets + current_game ---
     if payload.sets is not None:
-      values["sets"] = payload.sets
+        values["sets"] = payload.sets
 
-    # 🔢 recompute total games from sets
-    try:
-        values["current_game"] = sum(
-            (team + opp) for team, opp in payload.sets
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid sets format; expected [[team, opponent], ...]"
-        )
+        # recompute total games from sets (only if sets provided)
+        try:
+            values["current_game"] = sum((team + opp) for team, opp in payload.sets)
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid sets format; expected [[team, opponent], ...]"
+            )
 
+    # allow overriding current_game explicitly
     if payload.current_game is not None:
         values["current_game"] = int(payload.current_game)
 
-
+    # --- status / serve / winner ---
     if payload.status is not None:
         values["status"] = payload.status
 
     if payload.current_serve is not None:
-        values["current_serve"] = str(payload.current_serve)  # store "0"/"1"
+        values["current_serve"] = str(payload.current_serve)
 
-    # winner can be null intentionally; update only if explicitly sent
     if "winner" in payload.model_fields_set:
         values["winner"] = payload.winner
 
@@ -861,7 +908,6 @@ async def update_scores(scores_id: int, payload: UpdateScore):
     updated_row = await database.fetch_one(
         select(scores_tbl).where(scores_tbl.c.id == scores_id)
     )
-
     if not updated_row:
         raise HTTPException(status_code=404, detail="Score row not found")
 

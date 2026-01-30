@@ -41,6 +41,13 @@ async function del(url) {
     return false;
   }
 }
+const statusRank = (status) => {
+  const s = String(status || "").toLowerCase().trim();
+  if (s === "live" || s === "in_progress" || s === "in-progress") return 0;
+  if (s === "scheduled" || s === "pending") return 1;
+  if (s === "completed" || s === "finished") return 2;
+  return 3;
+};
 
 const normGender = (g) => {
   const s = String(g || "").toLowerCase();
@@ -253,7 +260,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
               <select
                 value={r.match_type || "singles"}
                 onChange={(e) => onChange({ match_type: e.target.value })}
-                disabled={!isScheduled} // lock after live
+                disabled={String(r.status).toLowerCase() === "completed"}
+
               >
                 <option value="singles">Singles</option>
                 <option value="doubles">Doubles</option>
@@ -267,7 +275,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                 onChange={(e) =>
                   onChange({ line_no: Number(e.target.value) })
                 }
-                disabled={!isScheduled} // lock after live
+                disabled={String(r.status).toLowerCase() === "completed"}
+
               />
             </Field>
           </Row>
@@ -287,7 +296,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
       <select
         value={r.player1 || ""}
         onChange={(e) => onChange({ player1: e.target.value })}
-        disabled={!isScheduled}
+        disabled={String(r.status).toLowerCase() === "completed"}
+
         className="sl-input"
         style={{ flex: 1, minWidth: 0 }}
       >
@@ -304,7 +314,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
       <select
         value={r.player2 || ""}
         onChange={(e) => onChange({ player2: e.target.value })}
-        disabled={!isScheduled}
+        disabled={String(r.status).toLowerCase() === "completed"}
+
         className="sl-input"
         style={{ flex: 1, minWidth: 0 }}
       >
@@ -320,7 +331,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
     <select
       value={r.player1 || ""}
       onChange={(e) => onChange({ player1: e.target.value })}
-      disabled={!isScheduled}
+      disabled={String(r.status).toLowerCase() === "completed"}
+
       className="sl-input"
     >
       <option value="">Select roster player…</option>
@@ -351,7 +363,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                       onChange({ opponent1: e.target.value })
                     }
                     placeholder="Opp 1"
-                    disabled={!isScheduled}
+                    disabled={String(r.status).toLowerCase() === "completed"}
+
                     className="sl-input"
                     style={{ flex: 1, minWidth: 0 }}
                   />
@@ -362,7 +375,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                       onChange({ opponent2: e.target.value })
                     }
                     placeholder="Opp 2"
-                    disabled={!isScheduled}
+                    disabled={String(r.status).toLowerCase() === "completed"}
+
                     className="sl-input"
                     style={{ flex: 1, minWidth: 0 }}
                   />
@@ -374,7 +388,8 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                     onChange({ opponent1: e.target.value })
                   }
                   placeholder="Opponent"
-                  disabled={!isScheduled}
+                  disabled={String(r.status).toLowerCase() === "completed"}
+
                   className="sl-input"
                 />
               )}
@@ -394,15 +409,15 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
               </select>
             </Field>
             <Field label="Status">
-              <select
-                value={r.status || (isScheduled ? "scheduled" : "live")}
-                onChange={(e) => onChange({ status: e.target.value })}
-                disabled // control by backend actions
-              >
-                <option value="scheduled">Scheduled</option>
-                <option value="live">Live</option>
-                <option value="completed">Completed</option>
-              </select>
+            <select
+  value={r.status || "live"}
+  onChange={(e) => onChange({ status: e.target.value })}
+  disabled={String(r.status).toLowerCase() === "completed"}
+>
+  <option value="scheduled">Scheduled</option>
+  <option value="live">Live</option>
+  <option value="completed">Completed</option>
+</select>
             </Field>
           </Row>
           <SetsEditor
@@ -709,13 +724,19 @@ async function saveScoreLine(matchId, row) {
 // ✅ total games across ALL sets (cumulative)
 const totalGame = normalizedSets.reduce((sum, [team, opp]) => sum + team + opp, 0);
 
-  const payload = {
-    status: row.status || "live",
-    current_serve: String(row.current_serve ?? "0"),
-    winner: row.winner ?? null,
-    sets: normalizedSets, 
-    current_game: totalGame, // ✅ number derived from sets
-  };
+const payload = {
+  match_type: row.match_type,
+  line_no: row.line_no,
+  player1: row.player1,
+  player2: row.player2,
+  opponent1: row.opponent1,
+  opponent2: row.opponent2,
+  status: row.status || "live",
+  current_serve: String(row.current_serve ?? "0"),
+  winner: row.winner ?? null,
+  sets: normalizedSets,
+  current_game: totalGame,
+};
 
   // only send sets if they’re not all zeros
   if (!isAllZeroSets(normalizedSets)) {
@@ -1132,22 +1153,26 @@ export default function Admin() {
   });
 
   const editingOpen = editing.matchId !== null;
+const liveMatchesFiltered = useMemo(
+  () => (liveMatches || []).filter((m) => normGender(m.gender) === genderTab),
+  [liveMatches, genderTab]
+);
 
-  const openEdit = (matchId, idx) => {
-    const src = linesByMatch[matchId]?.[idx];
-    if (!src) return;
-  
-    const visible = normalizeSets(src.sets ?? src.setsText, 3);
-  
-    setEditing({
-      matchId,
-      idx,
-      draftLine: {
-        ...src,
-        sets: visible.map(s => [s.team, s.opp]),
-      },
-    });
-  };
+const openEdit = (matchId, lineId) => {
+  const src = (linesByMatch[matchId] || []).find((r) => r.id === lineId);
+  if (!src) return;
+
+  const visible = normalizeSets(src.sets ?? src.setsText, 3);
+
+  setEditing({
+    matchId,
+    idx: null, // not needed anymore
+    draftLine: {
+      ...src,
+      sets: visible.map((s) => [s.team, s.opp]),
+    },
+  });
+};
   const closeEdit = () =>
     setEditing({ matchId: null, idx: null, draftLine: null });
   const commitEdit = async () => {
@@ -1436,6 +1461,7 @@ export default function Admin() {
           >
             Live Control
           </button>
+          
           <button
             className={`sl-logout ${
               tab === "schedule" ? "sl-view-btn" : ""
@@ -1457,6 +1483,20 @@ export default function Admin() {
         {/* ---------------- LIVE CONTROL ---------------- */}
         {tab === "live" && (
           <>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+  <button
+    className={`sl-logout ${genderTab === "men" ? "sl-view-btn" : ""}`}
+    onClick={() => setGenderTab("men")}
+  >
+    Men
+  </button>
+  <button
+    className={`sl-logout ${genderTab === "women" ? "sl-view-btn" : ""}`}
+    onClick={() => setGenderTab("women")}
+  >
+    Women
+  </button>
+</div>
             {/* top card: start scheduled matches */}
             <div
               className="sl-card"
@@ -1473,11 +1513,11 @@ export default function Admin() {
                   <div
                     style={{ fontWeight: 800, color: "#174d2a" }}
                   >
-                    {hasLive
-                      ? `${liveMatches.length} live match${
-                          liveMatches.length > 1 ? "es" : ""
-                        } in progress`
-                      : "No live match"}
+               {liveMatchesFiltered.length
+  ? `${liveMatchesFiltered.length} live ${
+      genderTab === "men" ? "men’s" : "women’s"
+    } match${liveMatchesFiltered.length > 1 ? "es" : ""} in progress`
+  : `No live ${genderTab === "men" ? "men’s" : "women’s"} match`}
                   </div>
                   <div style={{ color: "#4f6475" }}>
                     Use the selector on the right to start a
@@ -1502,10 +1542,8 @@ export default function Admin() {
                       Start scheduled match…
                     </option>
                     {matches
-                      .filter(
-                        (m) =>
-                          m.status?.toLowerCase() === "scheduled"
-                      )
+  .filter((m) => m.status?.toLowerCase() === "scheduled")
+  .filter((m) => m.gender === genderTab)
                       .sort(
                         (a, b) =>
                           (parseDateSafe(a.date)?.getTime() ?? 0) -
@@ -1524,15 +1562,11 @@ export default function Admin() {
             </div>
 
             {/* one big block per live match, like LiveScore */}
-            {hasLive ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                }}
-              >
-                {liveMatches.map((match) => {
+            {liveMatchesFiltered.length ? (
+  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    {[...liveMatchesFiltered]
+      .sort((a, b) => statusRank(a.status) - statusRank(b.status))
+      .map((match) => {
                   const lines = linesByMatch[match.id] || [];
                   return (
                     <div
@@ -1555,9 +1589,8 @@ export default function Admin() {
                               color: "#174d2a",
                             }}
                           >
-                            {`Live: Lions vs ${
-                              match.opponent || "TBD"
-                            }`}
+                           {`Live (${genderTab === "men" ? "Men" : "Women"}): Lions vs ${match.opponent || "TBD"}`}
+
                           </div>
                           <div style={{ color: "#4f6475" }}>
                             {fmtDate(match.date)}{" "}
@@ -1600,13 +1633,22 @@ export default function Admin() {
                       </div>
 
                       <div style={{ display: "grid", gap: 12 }}>
-                        {lines.map((r, idx) => (
-                          <AdminLineCard
-                            key={r.id || `new-${match.id}-${idx}`}
-                            line={r}
-                            onEdit={() => openEdit(match.id, idx)}
-                          />
-                        ))}
+                      {[...lines]
+  .sort((a, b) => {
+    // live first, scheduled next, completed last
+    const d = statusRank(a.status) - statusRank(b.status);
+    if (d !== 0) return d;
+
+    // tie-breaker: keep courts in order
+    return Number(a.line_no || 0) - Number(b.line_no || 0);
+  })
+  .map((r) => (
+    <AdminLineCard
+      key={r.id}
+      line={r}
+      onEdit={() => openEdit(match.id, r.id)}
+    />
+  ))}
                         {!lines.length && (
                           <div style={{ color: "#4f6475" }}>
                             No lines yet — add one above.

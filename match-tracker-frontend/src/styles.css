@@ -1441,3 +1441,25 @@
   line-height: 1;
   flex: 0 0 auto;
 }
+.team-toggle {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0 28px;
+}
+
+.team-btn {
+  padding: 12px 32px;
+  border-radius: 14px;
+  border: 2px solid #cfe3cf;
+  background: white;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.team-btn.active {
+  background: #165dff;
+  border-color: #165dff;
+  color: white;
+}
+
