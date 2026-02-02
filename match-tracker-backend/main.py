@@ -324,23 +324,35 @@ def create_player(payload: dict, user = Depends(admin_required), db=Depends(get_
     # ...perform insert/update using Core...
     current_user = Depends(admin_required)
     return {"ok": True, "by": user["email"]}
+from datetime import datetime, timezone
 
 def row_to_iso(row):
     d = dict(row)
     raw = d.get("date")
+
     if isinstance(raw, datetime):
-        d["date"] = raw.replace(tzinfo=None).isoformat(timespec="seconds")
+        # ensure UTC + explicit timezone for frontend
+        d["date"] = (
+            raw.astimezone(timezone.utc)
+               .isoformat(timespec="seconds")
+               .replace("+00:00", "Z")
+        )
     elif isinstance(raw, str) and raw:
-        # "YYYY-MM-DD HH:MM:SS.ffffff" -> "YYYY-MM-DDTHH:MM:SS"
-        isoish = raw.replace(" ", "T").split(".")[0]
+        # fallback (should rarely happen now)
         try:
-            dt = datetime.fromisoformat(isoish)
-            d["date"] = dt.isoformat(timespec="seconds")
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            d["date"] = (
+                dt.astimezone(timezone.utc)
+                  .isoformat(timespec="seconds")
+                  .replace("+00:00", "Z")
+            )
         except Exception:
-            d["date"] = isoish
+            d["date"] = raw
     else:
         d["date"] = None
+
     return d
+
 
 def _looks_live(row):
     st = str(row.get("status") or "").lower()
