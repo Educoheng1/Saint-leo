@@ -16,7 +16,8 @@ const normGender = (g) => {
 };
 const fmtDate = (iso) =>
   iso
-    ? new Date(iso).toLocaleString(undefined, {
+    ? new Date(iso).toLocaleString("en-US", {
+        timeZone: "America/New_York",
         weekday: "short",
         month: "short",
         day: "numeric",
@@ -242,7 +243,7 @@ export default function Schedule() {
     e.preventDefault();
     try {
       const body = {
-        date: new Date(newMatch.date).toISOString().replace("Z", ""),
+        date: newMatch.date,
         gender: tab,
         opponent: newMatch.opponent,
         location: newMatch.location,

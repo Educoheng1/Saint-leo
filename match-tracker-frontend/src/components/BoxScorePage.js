@@ -160,16 +160,18 @@ export default function BoxScorePage() {
   const { saintLeoPoints, opponentPoints } = useMemo(() => {
     let sl = 0;
     let opp = 0;
-
+    
     for (const m of matches) {
       const winnerSide = getTeamWinner(m);
       if (!winnerSide) continue;
-
+    
       const value = isDoublesMatch(m) ? 0.5 : 1;
-
       if (winnerSide === "team") sl += value;
       if (winnerSide === "opp") opp += value;
     }
+    
+    const saintLeoPoints = sl;
+    const opponentPoints = opp;
 
     return { saintLeoPoints: sl, opponentPoints: opp };
   }, [matches]);
