@@ -86,6 +86,7 @@ scores = Table(
     
     
 )
+scores_tbl = scores
 class UpdateScore(BaseModel):
     player1: Optional[str] = None
     player2: Optional[str] = None

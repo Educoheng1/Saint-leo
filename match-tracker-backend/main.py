@@ -6,7 +6,9 @@ from typing import Dict, List, Optional, Literal
 from datetime import  timezone
 from zoneinfo import ZoneInfo
 from fastapi import Depends, HTTPException
-
+from typing import Optional
+from fastapi import Query, HTTPException
+from sqlalchemy import func
 
 # FastAPI
 from fastapi import FastAPI, Depends, HTTPException, Request, status, Query
@@ -511,28 +513,30 @@ async def create_match(match: Match, ):
     return {"id": new_id, "message": "Match created"}
 
 
+
 @app.get("/schedule")
-async def list_schedule(status: Optional[str] = Query(None)):
+async def list_schedule(
+    status: Optional[str] = Query(None),
+    gender: Optional[str] = Query(None),
+):
     try:
-        # build query
         q = matches.select().order_by(matches.c.date.desc())
+
         if status:
             q = q.where(func.lower(matches.c.status) == status.lower())
 
+        if gender:
+            q = q.where(func.lower(matches.c.gender) == gender.lower())  # ✅ add this
+
         rows = await database.fetch_all(q)
-        data = [row_to_iso(r) for r in rows]
-        return data
+        return [row_to_iso(r) for r in rows]
 
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        # TEMP: show the error so we can debug Render
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": str(e),
-                "traceback": tb,
-            },
+            detail={"error": str(e), "traceback": tb},
         )
 
 from datetime import datetime, timezone
@@ -642,38 +646,51 @@ async def start_match(match_id: int):
 
 @app.post("/schedule/{match_id}/complete")
 async def complete_match(match_id: int, body: WinnerBody):
-    # This Depends here does nothing – FastAPI won't run it like this.
-    # If you want auth later, we can move it into the function parameters.
-    current_user = Depends(admin_required)
+    # ✅ count completed lines for this match
+    rows = await database.fetch_all(
+    scores_tbl.select().where(scores_tbl.c.match_id == match_id)
+)
 
-    # Make sure winner is string-friendly for the DB
-    winner_val = body.winner
-    if winner_val is not None:
-        winner_val = str(winner_val)
+    team = 0
+    opponent = 0
 
-    # Update the match
+    for r in rows:
+        w = str(r["winner"] or "").strip().lower()
+
+        # you currently store winner as "1" for team (from your logs)
+        if w == "1":
+            team += 1
+        elif w == "0":
+            opponent += 1
+        # (optional) also accept older values if you ever used them
+        elif w == "team":
+            team += 1
+        elif w == "opponent":
+            opponent += 1
+
+    team_score_json = {"team": team, "opponent": opponent} if (team + opponent) > 0 else None
+
+    # keep your winner field (match winner)
+    winner_val = str(body.winner) if body.winner is not None else None
+
+    # ✅ update match, including team_score
     query = (
         matches.update()
         .where(matches.c.id == match_id)
         .values(
             status="completed",
             winner=winner_val,
+            team_score=team_score_json,
         )
     )
     await database.execute(query)
 
-    # Now check if the match exists after update
-    updated_match = await database.fetch_one(
-        matches.select().where(matches.c.id == match_id)
-    )
-
+    updated_match = await database.fetch_one(matches.select().where(matches.c.id == match_id))
     if not updated_match:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    return {
-        "message": "Match completed",
-        "match": dict(updated_match),
-    }
+    return {"message": "Match completed", "match": dict(updated_match)}
+
 
 
 @app.delete("/schedule/{match_id}")
