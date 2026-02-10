@@ -75,23 +75,50 @@ class Match(BaseModel):
     match_number: int
     winner: Optional[str] = None  # Add winner field
 
-class Player(BaseModel):
+
+class Players(BaseModel):
     name: str
     gender: Literal["men", "women"]
     year: Optional[str] = None
 
-    doubles_all_time: Optional[int] = None
-    doubles_season: Optional[int] = None
-    singles_season: Optional[int] = None
-    singles_all_time: Optional[int] = None
+    singles_season_wins: Optional[int] = None
+    singles_season_losses: Optional[int] = None
+    singles_all_time_wins: Optional[int] = None
+    singles_all_time_losses: Optional[int] = None
+    doubles_season_wins: Optional[int] = None
+    doubles_season_losses: Optional[int] = None
+    doubles_all_time_wins: Optional[int] = None
+    doubles_all_time_losses: Optional[int] = None
 
-    model_config = {"extra": "ignore"}  # ignore unknown fields
+    model_config = {"extra": "ignore"}
 
     @field_validator("*", mode="before")
     @classmethod
     def empty_string_to_none(cls, v):
         return None if v == "" else v
 
+
+class PlayerUpdate(BaseModel):
+    name: Optional[str] = None
+    gender: Optional[Literal["men", "women"]] = None
+    year: Optional[str] = None
+
+    singles_season_wins: Optional[int] = None
+    singles_season_losses: Optional[int] = None
+    singles_all_time_wins: Optional[int] = None
+    singles_all_time_losses: Optional[int] = None
+    doubles_season_wins: Optional[int] = None
+    doubles_season_losses: Optional[int] = None
+    doubles_all_time_wins: Optional[int] = None
+    doubles_all_time_losses: Optional[int] = None
+
+    model_config = {"extra": "ignore"}
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def empty_string_to_none(cls, v):
+        return None if v == "" else v
+    
 class ScoreBox(BaseModel):
     match_id: int
     player1_id: int
@@ -712,38 +739,43 @@ PLAYER_COLUMNS = {
      "doubles_all_time", "doubles_season",
     "singles_season", "singles_all_time",
 }
-@app.post("/players")
-async def create_player(player: Player, current_user: str = Depends(admin_required)):
-    # Convert missing fields to NULL
-    data = {
-        "name": player.name,
-        "gender": player.gender,
-        "year": player.year if player.year is not None else None,
-    }
-
-    query = players.insert().values(**data)
-    new_id = await database.execute(query)
-    return {"id": new_id}
+from typing import Optional
+from fastapi import Query
+from sqlalchemy import func
 
 @app.get("/players")
-async def get_players():
-    query = players.select()
-    return await database.fetch_all(query)
+async def list_players(gender: Optional[str] = Query(None)):
+    q = players.select().order_by(players.c.name.asc())
+    if gender:
+        q = q.where(func.lower(players.c.gender) == gender.lower())
+    rows = await database.fetch_all(q)
+    return [dict(r) for r in rows]
+
+@app.post("/players")
+async def create_player(
+    payload: Players,
+    current_user: str = Depends(admin_required),
+):
+    values = payload.model_dump()
+    query = players.insert().values(**values)
+    new_id = await database.execute(query)
+    return {"id": new_id, **values}
+
 
 
 @app.put("/players/{player_id}")
-async def update_player(player_id: int, payload: dict, current_user: str = Depends(admin_required)):
-    # Keep ONLY valid columns (avoid "Unconsumed column names" error)
-    clean_payload = {k: (v if v not in ["", None] else None) 
-                     for k, v in payload.items() if k in PLAYER_COLUMNS}
+async def update_player(
+    player_id: int,
+    payload: PlayerUpdate,
+    current_user: str = Depends(admin_required),
+):
+    clean_payload = payload.model_dump(exclude_unset=True)
 
-    # If nothing valid was sent → still safe, but does no update
     if not clean_payload:
-        clean_payload = {"year": None, "gender": None, "name": None}
+        return {"message": "No fields to update"}
 
     query = players.update().where(players.c.id == player_id).values(**clean_payload)
     await database.execute(query)
-
     return {"message": "Player updated", "updated": clean_payload}
 
 
