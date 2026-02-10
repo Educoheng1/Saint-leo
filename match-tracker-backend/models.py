@@ -30,16 +30,20 @@ matches = Table(
 players = Table(
     "players",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", String, nullable=False),        # required
-    Column("gender", String, nullable=False),      # required
-    Column("year", String, nullable=True),         # FR/SO/JR/SR or 1–4
+    Column("id", Integer, primary_key=True),
+    Column("name", String, nullable=False),
+    Column("gender", String, nullable=False),
+    Column("year", String),
 
-    # New record/stat columns
-    Column("doubles_all_time", Integer, nullable=True),
-    Column("doubles_season", Integer, nullable=True),
-    Column("singles_season", Integer, nullable=True),
-    Column("singles_all_time", Integer, nullable=True),
+    Column("singles_season_wins", Integer),
+    Column("singles_season_losses", Integer),
+    Column("singles_all_time_wins", Integer),
+    Column("singles_all_time_losses", Integer),
+
+    Column("doubles_season_wins", Integer),
+    Column("doubles_season_losses", Integer),
+    Column("doubles_all_time_wins", Integer),
+    Column("doubles_all_time_losses", Integer),
 )
 
 

@@ -736,8 +736,10 @@ async def delete_match_and_scores(match_id: int):
 
 PLAYER_COLUMNS = {
     "name", "gender", "year",
-     "doubles_all_time", "doubles_season",
-    "singles_season", "singles_all_time",
+    "singles_season_wins", "singles_season_losses",
+    "singles_all_time_wins", "singles_all_time_losses",
+    "doubles_season_wins", "doubles_season_losses",
+    "doubles_all_time_wins", "doubles_all_time_losses",
 }
 from typing import Optional
 from fastapi import Query
