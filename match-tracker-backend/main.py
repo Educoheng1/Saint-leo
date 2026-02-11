@@ -736,22 +736,9 @@ async def delete_match_and_scores(match_id: int):
 
 PLAYER_COLUMNS = {
     "name", "gender", "year",
-    "singles_season_wins", "singles_season_losses",
-    "singles_all_time_wins", "singles_all_time_losses",
-    "doubles_season_wins", "doubles_season_losses",
-    "doubles_all_time_wins", "doubles_all_time_losses",
+     "doubles_all_time", "doubles_season",
+    "singles_season", "singles_all_time",
 }
-from typing import Optional
-from fastapi import Query
-from sqlalchemy import func
-
-@app.get("/players")
-async def list_players(gender: Optional[str] = Query(None)):
-    q = players.select().order_by(players.c.name.asc())
-    if gender:
-        q = q.where(func.lower(players.c.gender) == gender.lower())
-    rows = await database.fetch_all(q)
-    return [dict(r) for r in rows]
 
 @app.post("/players")
 async def create_player(
@@ -791,6 +778,32 @@ async def delete_player(player_id: int):
         return {"message": "Player deleted"}
     else:
         raise HTTPException(status_code=404, detail="Player not found")
+from typing import Optional
+from fastapi import Query
+from sqlalchemy import select, func
+
+@app.get("/players")
+async def list_players(gender: Optional[str] = Query(None)):
+    q = select(
+        players.c.id,
+        players.c.name,
+        players.c.gender,
+        players.c.year,
+        players.c.singles_season_wins,
+        players.c.singles_season_losses,
+        players.c.singles_all_time_wins,
+        players.c.singles_all_time_losses,
+        players.c.doubles_season_wins,
+        players.c.doubles_season_losses,
+        players.c.doubles_all_time_wins,
+        players.c.doubles_all_time_losses,
+    ).order_by(players.c.name.asc())
+
+    if gender:
+        q = q.where(func.lower(players.c.gender) == gender.lower())
+
+    rows = await database.fetch_all(q)
+    return [dict(r) for r in rows]
 
 @app.get("/livescore")
 def get_livescore():
