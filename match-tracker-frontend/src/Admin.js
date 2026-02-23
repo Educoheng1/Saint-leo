@@ -203,6 +203,13 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
   };
 
   async function handleComplete() {
+    if (winner === "unfinished") {
+      alert("Please select a winner before completing the line.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to complete this match?")) {
+      return;
+    }
     const res = await completeScoreLine(r.id, winner);
     if (res?.score) {
       onChange(res.score);          // keep modal draft in sync
@@ -260,8 +267,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
               <select
                 value={r.match_type || "singles"}
                 onChange={(e) => onChange({ match_type: e.target.value })}
-                disabled={String(r.status).toLowerCase() === "completed"}
-
               >
                 <option value="singles">Singles</option>
                 <option value="doubles">Doubles</option>
@@ -275,8 +280,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                 onChange={(e) =>
                   onChange({ line_no: Number(e.target.value) })
                 }
-                disabled={String(r.status).toLowerCase() === "completed"}
-
               />
             </Field>
           </Row>
@@ -296,8 +299,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
       <select
         value={r.player1 || ""}
         onChange={(e) => onChange({ player1: e.target.value })}
-        disabled={String(r.status).toLowerCase() === "completed"}
-
         className="sl-input"
         style={{ flex: 1, minWidth: 0 }}
       >
@@ -314,8 +315,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
       <select
         value={r.player2 || ""}
         onChange={(e) => onChange({ player2: e.target.value })}
-        disabled={String(r.status).toLowerCase() === "completed"}
-
         className="sl-input"
         style={{ flex: 1, minWidth: 0 }}
       >
@@ -331,8 +330,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
     <select
       value={r.player1 || ""}
       onChange={(e) => onChange({ player1: e.target.value })}
-      disabled={String(r.status).toLowerCase() === "completed"}
-
       className="sl-input"
     >
       <option value="">Select roster player…</option>
@@ -363,8 +360,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                       onChange({ opponent1: e.target.value })
                     }
                     placeholder="Opp 1"
-                    disabled={String(r.status).toLowerCase() === "completed"}
-
                     className="sl-input"
                     style={{ flex: 1, minWidth: 0 }}
                   />
@@ -375,8 +370,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                       onChange({ opponent2: e.target.value })
                     }
                     placeholder="Opp 2"
-                    disabled={String(r.status).toLowerCase() === "completed"}
-
                     className="sl-input"
                     style={{ flex: 1, minWidth: 0 }}
                   />
@@ -388,8 +381,6 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                     onChange({ opponent1: e.target.value })
                   }
                   placeholder="Opponent"
-                  disabled={String(r.status).toLowerCase() === "completed"}
-
                   className="sl-input"
                 />
               )}
@@ -408,43 +399,30 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                 <option value="1">Opponent</option>
               </select>
             </Field>
-            <Field label="Status">
-            <select
-  value={r.status || "live"}
-  onChange={(e) => onChange({ status: e.target.value })}
-  disabled={String(r.status).toLowerCase() === "completed"}
->
-  <option value="scheduled">Scheduled</option>
-  <option value="live">Live</option>
-  <option value="completed">Completed</option>
-</select>
-            </Field>
           </Row>
           <SetsEditor
   value={r.sets}
   onChange={(next) => onChange({ sets: next })}
 />
           {!isScheduled && (
-  <Row>
-    <Field label="Game">
-      <GameEditor
-        value={r.current_game}
-        onChange={(next) =>
-          onChange({
-            current_game: Array.isArray(next)
-              ? next
-              : Array.isArray(next?.score)
-              ? next.score
-              : [0, 0],
-          })
-        }
-      />
-    </Field>
-  </Row>
-)}
+            <>
+              <Row>
+                <Field label="Game">
+                  <GameEditor
+                    value={r.current_game}
+                    onChange={(next) =>
+                      onChange({
+                        current_game: Array.isArray(next)
+                          ? next
+                          : Array.isArray(next?.score)
+                          ? next.score
+                          : [0, 0],
+                      })
+                    }
+                  />
+                </Field>
+              </Row>
 
-          {isLive && (
-            <Row>
               <Field label="Complete line">
                 <div
                   style={{
@@ -469,7 +447,7 @@ function EditLineModal({ open, onClose, value, onChange, onSave, onRowChange, pl
                   </button>
                 </div>
               </Field>
-            </Row>
+            </>
           )}
 
           <div
