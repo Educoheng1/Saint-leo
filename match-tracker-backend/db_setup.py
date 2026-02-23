@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from databases import Database
+from sqlalchemy import MetaData
 
 # Import the ONE shared metadata from models (where tables are defined)
 from models import metadata
@@ -32,3 +33,6 @@ if SYNC_DATABASE_URL.startswith("sqlite"):
 engine = create_engine(SYNC_DATABASE_URL, connect_args=connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Ensure the comments table is created
+metadata.create_all(bind=engine)

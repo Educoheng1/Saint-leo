@@ -745,13 +745,59 @@ const payload = {
 
   try {
     console.log("SAVE payload", payload);
+    console.log("Normalized sets:", normalizedSets);
     const r = await fetch(`${API_BASE_URL}/scores/${row.id}`, {
       method: "PUT",
       headers,
       body: JSON.stringify(payload),
     });
     if (!r.ok) throw new Error(await r.text());
-    return await r.json();
+    
+    const result = await r.json();
+    console.log("Score saved:", result);
+    
+    // Post momentum if there are any games
+    if (totalGame > 0 && normalizedSets.length > 0) {
+      // Find the last non-zero set
+      let lastSet = null;
+      for (let i = normalizedSets.length - 1; i >= 0; i--) {
+        if (normalizedSets[i][0] > 0 || normalizedSets[i][1] > 0) {
+          lastSet = normalizedSets[i];
+          break;
+        }
+      }
+      
+      console.log("Last non-zero set:", lastSet);
+      
+      if (lastSet) {
+        const winner = lastSet[0] > lastSet[1] ? "team" : "opponent";
+        console.log("Posting momentum with winner:", winner, "to score ID:", row.id);
+        
+        try {
+          const momentumRes = await fetch(`${API_BASE_URL}/scores/${row.id}/momentum`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ winner }),
+          });
+          
+          if (!momentumRes.ok) {
+            const errorText = await momentumRes.text();
+            console.error("Momentum API error:", momentumRes.status, errorText);
+          } else {
+            const momentumData = await momentumRes.json();
+            console.log("Momentum response:", momentumData);
+          }
+        } catch (momentumErr) {
+          console.error("Momentum post error:", momentumErr);
+        }
+      } else {
+        console.log("No non-zero sets found");
+      }
+    } else {
+      console.log("No games to track (totalGame:", totalGame, ")");
+    }
+    
+    return result;
   } catch (err) {
     console.error("saveScoreLine error:", err);
     alert("Error saving line: " + err.message);

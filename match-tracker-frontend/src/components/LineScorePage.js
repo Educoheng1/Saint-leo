@@ -5,6 +5,7 @@ import API_BASE_URL from "../config";
 import "../styles.css";
 import Footer from "./Footer";
 import TopNav from "./Topnav";
+import { useAuth } from "../AuthContext";
 import {
     LineChart,
     Line,
@@ -15,7 +16,8 @@ import {
     ResponsiveContainer,
     Legend,
   } from "recharts";
-  
+  import { useNavigate } from "react-router-dom";
+
 
 
 const normalizeSets = (sets = [], N = 3) => {
@@ -125,8 +127,14 @@ const normalizeSets = (sets = [], N = 3) => {
   
 export default function LineScorePage() {
   const { matchId, lineId } = useParams();
+  const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [line, setLine] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [momentum, setMomentum] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let mounted = true;
@@ -134,8 +142,6 @@ export default function LineScorePage() {
     async function load() {
       setLoading(true);
       try {
-        // Recommended: backend endpoint that returns ONE line by id
-        // GET /scores/{lineId}
         const r = await fetch(`${API_BASE_URL}/scores/${lineId}`);
         if (!r.ok) throw new Error(await r.text());
         const data = await r.json();
@@ -149,11 +155,66 @@ export default function LineScorePage() {
       }
     }
 
+    async function loadComments() {
+      try {
+        const r = await fetch(`${API_BASE_URL}/scores/${lineId}/comments`);
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        setComments(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadMomentum() {
+      try {
+        const r = await fetch(`${API_BASE_URL}/scores/${lineId}/momentum`);
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        setMomentum(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     load();
+    loadComments();
+    // loadMomentum();
+    
     return () => {
       mounted = false;
     };
   }, [lineId]);
+
+  async function handleCommentSubmit(e) {
+    e.preventDefault();
+  
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+  
+    const r = await fetch(`${API_BASE_URL}/scores/${lineId}/comments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ text: newComment }),
+    });
+  
+    if (r.status === 401) {
+      setShowAuthModal(true);
+      return;
+    }
+  
+    if (!r.ok) throw new Error(await r.text());
+  
+    const newCommentData = await r.json();
+    setComments((prev) => [newCommentData, ...prev]);
+    setNewComment("");
+  }
+  
 
   if (loading) return <main className="sl-main">Loading…</main>;
   if (!line) return <main className="sl-main">Not found.</main>;
@@ -259,32 +320,83 @@ export default function LineScorePage() {
 })()}
 
       </section>
+{showAuthModal && (
+  <div className="auth-modal-overlay">
+    <div className="auth-modal">
+      <h3>Create an account to comment</h3>
+      <p>You must be logged in to join the conversation.</p>
 
-      <section className="sl-card" style={{ marginTop: 16 }}>
-  <h2>Stats</h2>
+      <div className="auth-modal-buttons">
+      <button onClick={() => window.dispatchEvent(new Event("open-login-modal"))}>
+  Log In
+</button>
 
-  <div
-    style={{
-      padding: "24px 16px",
-      border: "1px dashed rgba(0,0,0,0.15)",
-      borderRadius: 8,
-      textAlign: "center",
-      opacity: 0.75,
-    }}
-  >
-    <div style={{ fontSize: 16, marginBottom: 6 }}>
-      📊 Match statistics coming soon
-    </div>
-    <div style={{ fontSize: 13 }}>
-      Planned: match flow, momentum, cumulative games, and insights per set.
+        <button onClick={() => window.dispatchEvent(new Event("open-login-modal"))}>
+  Sign Up
+</button>
+
+      </div>
+
+      <button
+        className="close-modal"
+        onClick={() => setShowAuthModal(false)}
+      >
+        ✕
+      </button>
     </div>
   </div>
+)}
+<section className="sl-card comments-card">
+  <div className="comments-header">
+    <h2>Comments</h2>
+    <span className="comments-count">{comments.length}</span>
+  </div>
+
+  <div className="chat-container">
+    {comments.length === 0 ? (
+      <div className="empty-comments">
+        Be the first to comment on this match 🎾
+      </div>
+    ) : (
+      comments.slice().reverse().map((comment) => (
+        <div key={comment.id} className="chat-message">
+          <div className="avatar">
+            {(comment.user_first_name || "G")[0]}
+          </div>
+
+          <div className="message-content">
+            <div className="message-top">
+              <span className="message-user">
+                {comment.user_first_name || "Guest"}
+              </span>
+              <span className="message-timestamp">
+                {new Date(comment.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+
+            <div className="message-text">
+              {comment.text}
+            </div>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+
+  <form onSubmit={handleCommentSubmit} className="comment-input-container">
+    <input
+      type="text"
+      value={newComment}
+      onChange={(e) => setNewComment(e.target.value)}
+      placeholder="Add a comment…"
+      className="comment-input"
+    />
+    <button type="submit" className="comment-submit-button">
+      ➤
+    </button>
+  </form>
 </section>
 
-      <section className="sl-card" style={{ marginTop: 16 }}>
-        <h2>Comments</h2>
-        <div style={{ opacity: 0.75 }}>placeholder</div>
-      </section>
     </main>
     <Footer />
         </>

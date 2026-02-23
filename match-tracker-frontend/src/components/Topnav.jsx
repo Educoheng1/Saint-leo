@@ -1,5 +1,5 @@
 // src/components/TopNav.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import LoginModal from "../components/LoginModal";
 import { useAuth } from "../AuthContext";
@@ -13,6 +13,12 @@ export default function TopNav({ hasLive }) {
   const handleLinkClick = () => setOpen(false);
 
   // Prefer "First Last", fallback to email, then Guest
+  useEffect(() => {
+    const handler = () => setShowLogin(true);
+    window.addEventListener("open-login-modal", handler);
+    return () => window.removeEventListener("open-login-modal", handler);
+  }, []);
+  
   const displayName = user
     ? (user.first_name || user.last_name
         ? `${user.first_name || ""} ${user.last_name || ""}`.trim()

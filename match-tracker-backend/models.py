@@ -116,3 +116,27 @@ users = sa.Table(
     sa.Column("last_name", sa.String, nullable=False),
     sa.Column("role", sa.String, nullable=False, server_default="user"),  # "admin" or "user"
 )
+
+# Define the comments table
+comments = Table(
+    "comments",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=True),  # Allow NULL for anonymous comments
+    Column("score_id", Integer, ForeignKey("scores.id"), nullable=False),
+    Column("text", String, nullable=False),
+    Column("timestamp", DateTime, nullable=False),
+    extend_existing=True,  # Ensure the table is not redefined
+)
+
+momentum = Table(
+    "momentum",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("score_id", Integer, ForeignKey("scores.id"), nullable=False),
+    Column("game_number", Integer, nullable=False),
+    Column("team_momentum", Integer, nullable=False, default=0),
+    Column("opp_momentum", Integer, nullable=False, default=0),
+    Column("timestamp", DateTime, nullable=False),
+    extend_existing=True,
+)

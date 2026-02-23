@@ -31,7 +31,7 @@ from passlib.context import CryptContext
 
 # App modules
 from db_setup import engine, SessionLocal, database
-from models import players,metadata, matches, scores as scores_tbl, users
+from models import players,metadata, matches, scores as scores_tbl, users, momentum
 
 # Create tables
 app = FastAPI()
@@ -74,7 +74,20 @@ class Match(BaseModel):
     status: str = "scheduled"  # Optional default
     match_number: int
     winner: Optional[str] = None  # Add winner field
+# Define a new table for comments
+from sqlalchemy import Table, Column, Integer, String, ForeignKey, DateTime
+from datetime import datetime
 
+comments = Table(
+    "comments",
+    metadata,
+    Column("id", Integer, primary_key=True, index=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
+    Column("score_id", Integer, ForeignKey("scores.id"), nullable=False),
+    Column("text", String, nullable=False),
+    Column("timestamp", DateTime, default=datetime.utcnow, nullable=False),
+    extend_existing=True,  # Ensure the table is not redefined
+)
 
 class Players(BaseModel):
     name: str
@@ -239,34 +252,42 @@ def get_db():
         db.close()
 
 def get_current_user(token: str = Depends(oauth2), db=Depends(get_db)):
-    
-
     cred_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGO])
-       
-
         uid = payload.get("sub")
         role = payload.get("role")
-       
+        exp = payload.get("exp")
+
+        print("Authorization token received:", token)  # Log the token
+        print("Decoded token payload:", payload)  # Log the decoded token payload
+        print("User ID from token:", uid)  # Log the user ID extracted from the token
+
+        # Check if the token has expired
+        if datetime.utcnow() > datetime.utcfromtimestamp(exp):
+            print("Token has expired")
+            raise cred_exc
 
         if uid is None or role is None:
-            print("MISSING uid/role IN TOKEN → 401")
+            print(f"Invalid token payload: {payload}")
             raise cred_exc
 
         uid = int(uid)  # <-- cast to int for DB lookup
     except (JWTError, ValueError) as e:
-        print("JWT DECODE / UID ERROR:", repr(e))
+        print("JWT DECODE ERROR:", repr(e))
+        print("Token:", token)
         raise cred_exc
 
+    print("Decoded token payload:", payload)  # Log the decoded token payload
+
     row = db.execute(sa.select(users).where(users.c.id == uid)).mappings().first()
-    print("USER ROW FROM DB:", row)
+    print("USER ROW FROM DB:", row)  # Log the user row fetched from the database
 
     if not row:
-        print("NO USER FOUND FOR ID", uid, "→ 401")
+        print(f"User with ID {uid} not found in the database")
         raise cred_exc
 
     return row
@@ -1063,4 +1084,186 @@ async def get_match_scores(match_id: int):
 async def get_events_for_match(match_id: int):
     return await _fetch_match_scores(match_id)
 
+
+
+# Update the endpoint to use score_id instead of match_id
+from pydantic import BaseModel
+
+class CommentPayload(BaseModel):
+    text: str
+
+@app.post("/scores/{score_id}/comments")
+async def post_comment(
+    score_id: int,
+    payload: CommentPayload,
+    current_user=Depends(get_current_user),
+):
+    # block empty
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment cannot be empty")
+
+    ts = datetime.utcnow()
+
+    query = comments.insert().values(
+        user_id=current_user["id"],
+        score_id=score_id,
+        text=text,
+        timestamp=ts,
+    )
+    comment_id = await database.execute(query)
+
+    return {
+        "id": comment_id,
+        "user_id": current_user["id"],
+        "user_first_name": current_user.get("first_name"),
+        "user_role": current_user.get("role"),
+        "text": text,
+        "timestamp": ts,
+    }
+
+
+@app.get("/scores/{score_id}/comments")
+async def get_comments(score_id: int):
+    query = (
+        sa.select(
+            comments.c.id,
+            comments.c.text,
+            comments.c.timestamp,
+            users.c.first_name.label("user_first_name"),
+            users.c.role.label("user_role"),
+        )
+        .join(users, comments.c.user_id == users.c.id)
+        .where(comments.c.score_id == score_id)
+        .order_by(comments.c.timestamp.asc())
+    )
+
+    rows = await database.fetch_all(query)
+    return [
+        {
+            "id": row["id"],
+            "user_first_name": row["user_first_name"],
+            "user_role": row["user_role"],
+            "text": row["text"],
+            "timestamp": row["timestamp"],
+        }
+        for row in rows
+    ]
+
+class MomentumPayload(BaseModel):
+    winner: str  # "team" or "opponent"
+
+@app.post("/scores/{score_id}/momentum")
+async def add_momentum(
+    score_id: int,
+    payload: MomentumPayload,
+):
+    # Get current score
+    score_row = await database.fetch_one(
+        select(scores_tbl).where(scores_tbl.c.id == score_id)
+    )
+    if not score_row:
+        raise HTTPException(status_code=404, detail="Score not found")
+
+    # Get current sets and calculate games per set
+    sets = _coerce_sets(score_row["sets"])
+    games_per_set = [team + opp for team, opp in sets]
+    total_games = sum(games_per_set)
+    
+    # Calculate which set we're in based on total games
+    current_set_index = 0
+    games_before_current_set = 0
+    cumulative = 0
+    for i, set_games in enumerate(games_per_set):
+        if cumulative + set_games >= total_games:
+            current_set_index = i
+            games_before_current_set = cumulative
+            break
+        cumulative += set_games
+
+    # Get last momentum entry
+    last_momentum = await database.fetch_one(
+        select(momentum)
+        .where(momentum.c.score_id == score_id)
+        .order_by(momentum.c.game_number.desc())
+    )
+
+    if last_momentum:
+        last_game_number = last_momentum["game_number"]
+        last_set_games = 0
+        for i, set_games in enumerate(games_per_set):
+            if sum(games_per_set[:i+1]) >= last_game_number:
+                last_set_games = sum(games_per_set[:i])
+                break
+        
+        # Check if we moved to a new set - reset momentum to 0
+        if games_before_current_set > last_set_games:
+            cumulative_momentum = 0
+        else:
+            cumulative_momentum = last_momentum["team_momentum"] - last_momentum["opp_momentum"]
+    else:
+        last_game_number = 0
+        cumulative_momentum = 0
+        
+        # Insert starting point (0,0)
+        query = momentum.insert().values(
+            score_id=score_id,
+            game_number=0,
+            team_momentum=0,
+            opp_momentum=0,
+            timestamp=datetime.utcnow(),
+        )
+        await database.execute(query)
+
+    # Add momentum for each new game
+    for game_num in range(last_game_number + 1, total_games + 1):
+        # Each new game: if team wins +1, if opponent wins -1
+        if payload.winner == "team":
+            cumulative_momentum += 1
+            team_mom = cumulative_momentum if cumulative_momentum > 0 else 0
+            opp_mom = 0
+        else:
+            cumulative_momentum -= 1
+            team_mom = 0
+            opp_mom = abs(cumulative_momentum) if cumulative_momentum < 0 else 0
+
+        query = momentum.insert().values(
+            score_id=score_id,
+            game_number=game_num,
+            team_momentum=team_mom,
+            opp_momentum=opp_mom,
+            timestamp=datetime.utcnow(),
+        )
+        await database.execute(query)
+
+    return {
+        "games_added": total_games - last_game_number,
+        "current_game": total_games,
+        "cumulative_momentum": cumulative_momentum,
+    }
+
+@app.delete("/scores/{score_id}/momentum")
+async def clear_momentum(score_id: int):
+    await database.execute(
+        momentum.delete().where(momentum.c.score_id == score_id)
+    )
+    return {"message": "Momentum cleared"}
+
+@app.get("/scores/{score_id}/momentum")
+async def get_momentum(score_id: int):
+    query = (
+        select(momentum)
+        .where(momentum.c.score_id == score_id)
+        .order_by(momentum.c.game_number.asc())
+    )
+    rows = await database.fetch_all(query)
+    return [
+        {
+            "game_number": row["game_number"],
+            "team_momentum": row["team_momentum"],
+            "opp_momentum": row["opp_momentum"],
+            "timestamp": row["timestamp"],
+        }
+        for row in rows
+    ]
 
