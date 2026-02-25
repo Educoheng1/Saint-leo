@@ -694,34 +694,28 @@ async def start_match(match_id: int):
 
 @app.post("/schedule/{match_id}/complete")
 async def complete_match(match_id: int, body: WinnerBody):
-    # ✅ count completed lines for this match
     rows = await database.fetch_all(
-    scores_tbl.select().where(scores_tbl.c.match_id == match_id)
-)
+        scores_tbl.select().where(scores_tbl.c.match_id == match_id)
+    )
 
-    team = 0
-    opponent = 0
+    team = 0.0
+    opponent = 0.0
 
     for r in rows:
         w = str(r["winner"] or "").strip().lower()
+        match_type = str(r["match_type"] or "").strip().lower()
+        
+        # doubles = 0.5 points, singles = 1 point
+        points = 0.5 if match_type == "doubles" else 1.0
+        
+        if w == "1" or w == "team":
+            team += points
+        elif w == "0" or w == "opponent":
+            opponent += points
 
-        # you currently store winner as "1" for team (from your logs)
-        if w == "1":
-            team += 1
-        elif w == "0":
-            opponent += 1
-        # (optional) also accept older values if you ever used them
-        elif w == "team":
-            team += 1
-        elif w == "opponent":
-            opponent += 1
-
-    team_score_json = {"team": team, "opponent": opponent} if (team + opponent) > 0 else None
-
-    # keep your winner field (match winner)
+    team_score_json = {"team": int(team), "opponent": int(opponent)} if (team + opponent) > 0 else None
     winner_val = str(body.winner) if body.winner is not None else None
 
-    # ✅ update match, including team_score
     query = (
         matches.update()
         .where(matches.c.id == match_id)
