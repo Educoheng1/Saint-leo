@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 
 import API_BASE_URL from "../config";
 import BackButton from "../components/BackButton";
@@ -298,6 +298,24 @@ export default function BoxScorePage() {
             Winner: <span style={{ fontWeight: 700 }}>{winnerLabel}</span>
           </div>
         )}
+
+        {/* match stats link */}
+        <Link
+          to={`/livescore/${id}/line/${match.id}`}
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            padding: "6px 12px",
+            background: "#174d2a",
+            color: "#fff",
+            borderRadius: 8,
+            textDecoration: "none",
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          Match stats
+        </Link>
       </div>
     );
   };
