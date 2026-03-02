@@ -13,6 +13,7 @@ export default function BoxScorePage() {
 
   const [matches, setMatches] = useState([]);
   const [scheduleMatch, setScheduleMatch] = useState(null);
+  const [commentCounts, setCommentCounts] = useState({});
 
   // ---------- helpers ----------
 
@@ -131,8 +132,25 @@ export default function BoxScorePage() {
         const eventsJson = await eventsRes.json();
         const matchJson = await matchRes.json();
 
-        setMatches(Array.isArray(eventsJson) ? eventsJson : []);
+        const matchesData = Array.isArray(eventsJson) ? eventsJson : [];
+        setMatches(matchesData);
         setScheduleMatch(matchJson || null);
+
+        const counts = {};
+        await Promise.all(
+          matchesData.map(async (match) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/scores/${match.id}/comments`);
+              if (res.ok) {
+                const comments = await res.json();
+                counts[match.id] = Array.isArray(comments) ? comments.length : 0;
+              }
+            } catch (err) {
+              counts[match.id] = 0;
+            }
+          })
+        );
+        setCommentCounts(counts);
       } catch (err) {
         console.error("Error loading box score data:", err);
       }
@@ -299,23 +317,27 @@ export default function BoxScorePage() {
           </div>
         )}
 
-        {/* match stats link */}
-        <Link
-          to={`/livescore/${id}/line/${match.id}`}
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            padding: "6px 12px",
-            background: "#174d2a",
-            color: "#fff",
-            borderRadius: 8,
-            textDecoration: "none",
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          Match stats
-        </Link>
+        {/* match stats link and comments */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+          <Link
+            to={`/livescore/${id}/line/${match.id}`}
+            style={{
+              display: "inline-block",
+              padding: "6px 12px",
+              background: "#174d2a",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            Match stats
+          </Link>
+          <div style={{ fontSize: 13, color: "#4f6475" }}>
+            Comments: <span style={{ fontWeight: 600 }}>{commentCounts[match.id] || 0}</span>
+          </div>
+        </div>
       </div>
     );
   };
